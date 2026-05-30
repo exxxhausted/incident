@@ -8,13 +8,13 @@ Library architecture consists of some main aspects:
 
 ## 1. Iterator-based design
 
-Iterators is a main source of truth, moreover I decided that it is most powerful and efficient way to interact with internals of your graphs.
+Iterators are a main source of truth, moreover I decided that they are most powerful and efficient way to interact with internals of your graphs.
 This principle became the basis of current API. 
 
 ## 2. Topology protection 
 
-API are based on idea of access through proxy-objects that protects the internal information about topology.
-"Incident" provides a guarantee guarantee that you won't break the topology by dereferencing an iterator.  
+The API is based on idea of access through proxy-objects that protects the internal information about topology.
+"Incident" provides a guarantee that you won't break the topology by dereferencing an iterator.  
 Unfortunately there is no overload of `operator ->`.
 
 ## 3. Integration with std::ranges
@@ -27,8 +27,8 @@ Examples:
 `for (auto a : vertex.adjacentArcs()) { ... }`  
 
 ## Header-only and single‑header edition 
-There is no options to precompile difficult template code, so header-only distribution is only possible.  
-You always can include all content of "Incident" immediately with usage of `single_header/incident.hpp` in your `third_party`
+There is no way to precompile difficult template code, so header-only distribution is only possible.  
+You always can include all content of "Incident" immediately by using `single_header/incident.hpp` in your `third_party`
 
 # Core concepts
 
