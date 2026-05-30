@@ -165,7 +165,6 @@ public:
     using ArcProxy            = _ArcProxy<false>;
     using ConstArcProxy       = _ArcProxy<true>;
 
-    // ----- Вершины -----
     template<typename... Args>
     VertexIterator emplaceVertex(Args&&... args) {
         _vertices.emplace_back(std::forward<Args>(args)...);
@@ -188,7 +187,6 @@ public:
         _vertices.erase(vertexIt._it);
     }
 
-    // ----- Дуги -----
     // Вариант для ArcData != void
     template<typename... Args>
         requires (!std::is_void_v<ArcData>)
@@ -226,7 +224,6 @@ public:
         _arcs.erase(arcIt._it);
     }
 
-    // ----- Итераторы и обходы -----
     VertexIterator      beginVertices()        { return VertexIterator(_vertices.begin()); }
     VertexIterator      endVertices()          { return VertexIterator(_vertices.end()); }
     ConstVertexIterator beginVertices()  const { return ConstVertexIterator(_vertices.begin()); }
