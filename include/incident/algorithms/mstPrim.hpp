@@ -23,12 +23,12 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
     using _Graph = UndirectedAbstractGraph<VertexData, EdgeData>;
 
     using _СHashMap = std::unordered_map<VertexData,
-                                       typename _Graph::ConstVertexIterator,
+                                       typename _Graph::ConstVertexDescriptor,
                                        VHash,
                                        VEqual>;
 
     using _HashMap = std::unordered_map<VertexData,
-                                        typename _Graph::VertexIterator,
+                                        typename _Graph::VertexDescriptor,
                                         VHash,
                                         VEqual>;
 
@@ -43,17 +43,16 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
 
     if (graph.vertexCount() == 0) return _Graph{};
 
-    _СHashMap originalVerticesIteratorsCollection(0, vHash, vEqual);
+    _СHashMap originalVerticesDescriptorsCollection(0, vHash, vEqual);
 
-    for (auto vit = graph.cbeginVertices(); vit != graph.cendVertices(); ++vit)
-        originalVerticesIteratorsCollection[(*vit).data()] = vit;
+    for (auto vD : graph.constVertices()) originalVerticesDescriptorsCollection.insert( { vD.data(), vD } );
 
     _Graph mst;
-    _HashMap mstVerticesIteratorsCollection(0, vHash, vEqual);
+    _HashMap mstVerticesDescriptorsCollection(0, vHash, vEqual);
 
-    for (const auto& [vData, _] : originalVerticesIteratorsCollection) {
+    for (const auto& [vData, _] : originalVerticesDescriptorsCollection) {
         VertexData id = vData;
-        mstVerticesIteratorsCollection[id] = mst.addVertex(id);
+        mstVerticesDescriptorsCollection[id] = mst.addVertex(id);
     }
 
     if (graph.edgeCount() == 0) return mst;
@@ -69,13 +68,13 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
     std::priority_queue<_QueueEl, std::vector<_QueueEl>, decltype(cmp)> pq(cmp);
 
     std::unordered_set<VertexData, VHash, VEqual> visited(0, vHash, vEqual);
-    VertexData startData = originalVerticesIteratorsCollection.begin()->first;
+    VertexData startData = originalVerticesDescriptorsCollection.begin()->first;
     visited.insert(startData);
 
-    auto startIt = originalVerticesIteratorsCollection[startData];
-    for (auto edge : (*startIt).incidentEdges()) {
-        auto other = edge.otherEnd(startIt);
-        VertexData otherData = (*other).data();
+    auto startDescr = originalVerticesDescriptorsCollection[startData];
+    for (auto edge : startDescr.incidentEdges()) {
+        auto other = edge.otherEnd(startDescr);
+        VertexData otherData = other.data();
         EdgeData w = edge.data();
         pq.push( { w, otherData, startData } );
     }
@@ -86,14 +85,14 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
         if (visited.contains(vData)) continue;
 
         visited.insert(vData);
-        mst.addEdge(mstVerticesIteratorsCollection[parentData],
-                    mstVerticesIteratorsCollection[vData],
+        mst.addEdge(mstVerticesDescriptorsCollection[parentData],
+                    mstVerticesDescriptorsCollection[vData],
                     w);
 
-        auto vIt = originalVerticesIteratorsCollection[vData];
-        for (auto edge : (*vIt).incidentEdges()) {
-            auto other = edge.otherEnd(vIt);
-            VertexData otherData = (*other).data();
+        auto vDescr = originalVerticesDescriptorsCollection[vData];
+        for (auto edge : vDescr.incidentEdges()) {
+            auto other = edge.otherEnd(vDescr);
+            VertexData otherData = other.data();
             if (!visited.contains(otherData))
                 pq.push( { edge.data(), otherData, vData } );
         }

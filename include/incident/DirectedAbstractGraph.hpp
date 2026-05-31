@@ -3,7 +3,6 @@
 
 #include <list>
 #include <ranges>
-#include <stdexcept>
 #include <type_traits>
 
 namespace exx::incident {
@@ -110,7 +109,7 @@ private:
 
     // ---------- Итераторы (только для обхода) ----------
     template<bool isConst>
-    class _VertexIteratorImpl {
+    class _VertexIterator {
     private:
         using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _it;
@@ -125,26 +124,26 @@ private:
         using iterator_category     = std::forward_iterator_tag;
         using iterator_concept      = std::forward_iterator_tag;
 
-        _VertexIteratorImpl() = default;
-        _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
-        _VertexIteratorImpl& operator = (const _VertexIteratorImpl&) = default;
+        _VertexIterator() = default;
+        _VertexIterator(const _VertexIterator&) = default;
+        _VertexIterator& operator = (const _VertexIterator&) = default;
 
-        explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
+        explicit _VertexIterator(_ConditionalVertexLabel it) : _it(it) {}
 
         // Конвертация из неконстантного в константный
-        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+        _VertexIterator(const _VertexIterator<false>& other) requires isConst
             : _it(other._it) {}
 
         reference operator*() const { return value_type(_it); }
-        _VertexIteratorImpl& operator++() { ++_it; return *this; }
-        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
+        _VertexIterator& operator++() { ++_it; return *this; }
+        _VertexIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const _VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const _VertexIteratorImpl& other) const { return !(*this == other); }
+        bool operator==(const _VertexIterator& other) const { return _it == other._it; }
+        bool operator!=(const _VertexIterator& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
-    class _ArcIteratorImpl {
+    class _ArcIterator {
     private:
         using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
         _ConditionalArcLabel _it;
@@ -159,21 +158,21 @@ private:
         using iterator_category     = std::forward_iterator_tag;
         using iterator_concept      = std::forward_iterator_tag;
 
-        _ArcIteratorImpl() = default;
-        _ArcIteratorImpl(const _ArcIteratorImpl&) = default;
-        _ArcIteratorImpl& operator = (const _ArcIteratorImpl&) = default;
+        _ArcIterator() = default;
+        _ArcIterator(const _ArcIterator&) = default;
+        _ArcIterator& operator = (const _ArcIterator&) = default;
 
-        explicit _ArcIteratorImpl(_ConditionalArcLabel it) : _it(it) {}
+        explicit _ArcIterator(_ConditionalArcLabel it) : _it(it) {}
 
-        _ArcIteratorImpl(const _ArcIteratorImpl<false>& other) requires isConst
+        _ArcIterator(const _ArcIterator<false>& other) requires isConst
             : _it(other._it) {}
 
         reference operator*() const { return value_type(_it); }
-        _ArcIteratorImpl& operator++() { ++_it; return *this; }
-        _ArcIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
+        _ArcIterator& operator++() { ++_it; return *this; }
+        _ArcIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const _ArcIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const _ArcIteratorImpl& other) const { return !(*this == other); }
+        bool operator==(const _ArcIterator& other) const { return _it == other._it; }
+        bool operator!=(const _ArcIterator& other) const { return !(*this == other); }
     };
 
 public:
@@ -183,10 +182,10 @@ public:
     using ArcDescriptor         = _ArcDescriptor<false>;
     using ConstArcDescriptor    = _ArcDescriptor<true>;
 
-    using VertexIterator      = _VertexIteratorImpl<false>;
-    using ConstVertexIterator = _VertexIteratorImpl<true>;
-    using ArcIterator         = _ArcIteratorImpl<false>;
-    using ConstArcIterator    = _ArcIteratorImpl<true>;
+    using VertexIterator      = _VertexIterator<false>;
+    using ConstVertexIterator = _VertexIterator<true>;
+    using ArcIterator         = _ArcIterator<false>;
+    using ConstArcIterator    = _ArcIterator<true>;
 
     // ---------- Методы графа ----------
     template<typename... Args>
@@ -199,13 +198,10 @@ public:
     VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
 
     void removeVertex(VertexDescriptor vertex) {
-        // Удаляем все дуги, где вершина участвует
         for (auto it = _arcs.begin(); it != _arcs.end(); ) {
             if (it->_from == vertex._label || it->_to == vertex._label) {
-                if (it->_from == vertex._label) {
-                    it->_from->_adjacentArcs.erase(it->_meta._posInFrom);
-                }
-                // Для входящих дуг ничего не удаляем из списков, они не хранятся в to
+                // Удаляем дугу из списка смежности источника
+                it->_from->_adjacentArcs.erase(it->_meta._posInFrom);
                 it = _arcs.erase(it);
             } else {
                 ++it;

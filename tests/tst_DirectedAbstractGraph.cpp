@@ -2,7 +2,7 @@
 #include "incident/DirectedAbstractGraph.hpp"
 
 using namespace exx::incident;
-/*
+
 TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
     SECTION("Empty graph") {
         DirectedAbstractGraph<int, int> g;
@@ -17,9 +17,9 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
         auto v3 = g.addVertex("C");
 
         REQUIRE(g.vertexCount() == 3);
-        REQUIRE((*v1).data() == "A");
-        REQUIRE((*v2).data() == "B");
-        REQUIRE((*v3).data() == "C");
+        REQUIRE(v1.data() == "A");
+        REQUIRE(v2.data() == "B");
+        REQUIRE(v3.data() == "C");
     }
 
     SECTION("Add arcs") {
@@ -29,9 +29,9 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
         auto arc = g.addArc(v1, v2, 42);
 
         REQUIRE(g.arcCount() == 1);
-        REQUIRE((*arc).data() == 42);
-        REQUIRE((*(*arc).from()).data() == 1);
-        REQUIRE((*(*arc).to()).data() == 2);
+        REQUIRE(arc.data() == 42);
+        REQUIRE(arc.from().data() == 1);
+        REQUIRE(arc.to().data() == 2);
     }
 
     SECTION("Adjacent arcs iteration from vertex") {
@@ -43,7 +43,7 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
         g.addArc(v1, v3, 20);
         g.addArc(v2, v1, 30); // обратная дуга не должна влиять на исходящие из v1
 
-        auto arcsFromV1 = (*v1).adjacentArcs();
+        auto arcsFromV1 = v1.adjacentArcs();
         int sum = 0;
         for (auto arc : arcsFromV1) {
             sum += arc.data();
@@ -61,7 +61,7 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
         g.removeArc(arc);
         REQUIRE(g.arcCount() == 0);
         // Список смежности v1 должен быть пуст
-        REQUIRE((*v1).adjacentArcs().empty());
+        REQUIRE(v1.adjacentArcs().empty());
     }
 
     SECTION("Remove vertex also removes incident arcs") {
@@ -81,11 +81,11 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
         REQUIRE(g.vertexCount() == 2);
         REQUIRE(g.arcCount() == 1);
         // Проверяем, что у v1 нет исходящих дуг (была только в v2)
-        CHECK((*v1).adjacentArcs().empty());
+        CHECK(v1.adjacentArcs().empty());
         // У v3 есть исходящая дуга в v1
-        auto arcsFromV3 = (*v3).adjacentArcs();
+        auto arcsFromV3 = v3.adjacentArcs();
         REQUIRE(std::distance(arcsFromV3.begin(), arcsFromV3.end()) == 1);
-        REQUIRE((*(*arcsFromV3.begin()).to()).data() == 1);
+        REQUIRE((*arcsFromV3.begin()).to().data() == 1);
     }
 
     SECTION("Multiple arcs are allowed (parallel arcs)") {
@@ -97,7 +97,7 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
         g.addArc(v1, v2, 30);
 
         REQUIRE(g.arcCount() == 3);
-        auto arcs = (*v1).adjacentArcs();
+        auto arcs = v1.adjacentArcs();
         int sum = 0;
         for (auto a : arcs) sum += a.data();
         REQUIRE(sum == 60);
@@ -120,4 +120,4 @@ TEST_CASE("DirectedAbstractGraph works correctly", "[directed]") {
     }
 
 }
-*/
+

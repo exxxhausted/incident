@@ -24,6 +24,13 @@ public:
         std::ranges::copy(list | std::views::join, _storage.begin());
     }
 
+    MatrixOwningView(const std::vector<std::vector<T>>& vec) {
+        _rows = vec.size();
+        _cols = vec.begin()->size();
+        _storage.reserve(_rows * _cols);
+        std::ranges::copy(vec | std::views::join, _storage.begin());
+    }
+
     template<MatrixLike Mat>
     MatrixOwningView(const Mat& mat)
         : _rows(mat.rows()), _cols(mat.cols()), _storage(_rows * _cols)

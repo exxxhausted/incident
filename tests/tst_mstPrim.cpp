@@ -19,8 +19,8 @@ ED totalWeight(const UndirectedAbstractGraph<VD, ED>& g) {
 template<typename VD, typename ED>
 bool hasEdge(const UndirectedAbstractGraph<VD, ED>& g, int u, int v, ED w) {
     for (auto e : g.edges()) {
-        int a = (*e.v1()).data();
-        int b = (*e.v2()).data();
+        int a = e.v1().data();
+        int b = e.v2().data();
         if ((a == u && b == v) || (a == v && b == u)) return e.data() == w;
     }
     return false;

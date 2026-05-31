@@ -6,7 +6,6 @@
 
 #include <list>
 #include <ranges>
-#include <stdexcept>
 #include <type_traits>
 
 namespace exx::incident {
@@ -113,7 +112,7 @@ private:
 
     // ---------- Итераторы (только для обхода) ----------
     template<bool isConst>
-    class _VertexIteratorImpl {
+    class _VertexIterator {
     private:
         using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _it;
@@ -128,26 +127,26 @@ private:
         using iterator_category     = std::forward_iterator_tag;
         using iterator_concept      = std::forward_iterator_tag;
 
-        _VertexIteratorImpl() = default;
-        _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
-        _VertexIteratorImpl& operator = (const _VertexIteratorImpl&) = default;
+        _VertexIterator() = default;
+        _VertexIterator(const _VertexIterator&) = default;
+        _VertexIterator& operator = (const _VertexIterator&) = default;
 
-        explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
+        explicit _VertexIterator(_ConditionalVertexLabel it) : _it(it) {}
 
         // Конвертация из неконстантного в константный
-        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+        _VertexIterator(const _VertexIterator<false>& other) requires isConst
             : _it(other._it) {}
 
         reference operator*() const { return value_type(_it); }
-        _VertexIteratorImpl& operator++() { ++_it; return *this; }
-        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
+        _VertexIterator& operator++() { ++_it; return *this; }
+        _VertexIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const _VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const _VertexIteratorImpl& other) const { return !(*this == other); }
+        bool operator==(const _VertexIterator& other) const { return _it == other._it; }
+        bool operator!=(const _VertexIterator& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
-    class _ArcIteratorImpl {
+    class _ArcIterator {
     private:
         using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
         _ConditionalArcLabel _it;
@@ -162,21 +161,21 @@ private:
         using iterator_category     = std::forward_iterator_tag;
         using iterator_concept      = std::forward_iterator_tag;
 
-        _ArcIteratorImpl() = default;
-        _ArcIteratorImpl(const _ArcIteratorImpl&) = default;
-        _ArcIteratorImpl& operator = (const _ArcIteratorImpl&) = default;
+        _ArcIterator() = default;
+        _ArcIterator(const _ArcIterator&) = default;
+        _ArcIterator& operator = (const _ArcIterator&) = default;
 
-        explicit _ArcIteratorImpl(_ConditionalArcLabel it) : _it(it) {}
+        explicit _ArcIterator(_ConditionalArcLabel it) : _it(it) {}
 
-        _ArcIteratorImpl(const _ArcIteratorImpl<false>& other) requires isConst
+        _ArcIterator(const _ArcIterator<false>& other) requires isConst
             : _it(other._it) {}
 
         reference operator*() const { return value_type(_it); }
-        _ArcIteratorImpl& operator++() { ++_it; return *this; }
-        _ArcIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
+        _ArcIterator& operator++() { ++_it; return *this; }
+        _ArcIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const _ArcIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const _ArcIteratorImpl& other) const { return !(*this == other); }
+        bool operator==(const _ArcIterator& other) const { return _it == other._it; }
+        bool operator!=(const _ArcIterator& other) const { return !(*this == other); }
     };
 
 public:
@@ -186,10 +185,10 @@ public:
     using ArcDescriptor         = _ArcDescriptor<false>;
     using ConstArcDescriptor    = _ArcDescriptor<true>;
 
-    using VertexIterator      = _VertexIteratorImpl<false>;
-    using ConstVertexIterator = _VertexIteratorImpl<true>;
-    using ArcIterator         = _ArcIteratorImpl<false>;
-    using ConstArcIterator    = _ArcIteratorImpl<true>;
+    using VertexIterator      = _VertexIterator<false>;
+    using ConstVertexIterator = _VertexIterator<true>;
+    using ArcIterator         = _ArcIterator<false>;
+    using ConstArcIterator    = _ArcIterator<true>;
 
     // ---------- Методы графа ----------
     template<typename... Args>
@@ -202,13 +201,10 @@ public:
     VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
 
     void removeVertex(VertexDescriptor vertex) {
-        // Удаляем все дуги, где вершина участвует
         for (auto it = _arcs.begin(); it != _arcs.end(); ) {
             if (it->_from == vertex._label || it->_to == vertex._label) {
-                if (it->_from == vertex._label) {
-                    it->_from->_adjacentArcs.erase(it->_meta._posInFrom);
-                }
-                // Для входящих дуг ничего не удаляем из списков, они не хранятся в to
+                // Удаляем дугу из списка смежности источника
+                it->_from->_adjacentArcs.erase(it->_meta._posInFrom);
                 it = _arcs.erase(it);
             } else {
                 ++it;
@@ -294,6 +290,8 @@ public:
 
 #include <list>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 
 namespace exx::incident {
 
@@ -321,18 +319,13 @@ private:
     struct _Edge {
         _VertexLabel _v1;
         _VertexLabel _v2;
-
-        [[no_unique_address]]
-        _EdgeData _data;
-
-        _EraseAccelerationMetaData _meta{};   // метаданные заполняются ПОСЛЕ вставки
+        [[no_unique_address]] _EdgeData _data;
+        _EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
             requires (!std::is_void_v<EdgeData>)
-        _Edge(_VertexLabel v1, _VertexLabel v2, Args&&... args) :
-            _v1(v1),
-            _v2(v2),
-            _data(std::forward<Args>(args)...) {}
+        _Edge(_VertexLabel v1, _VertexLabel v2, Args&&... args)
+            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
 
         _Edge(_VertexLabel v1, _VertexLabel v2)
             requires (std::is_void_v<EdgeData>)
@@ -342,7 +335,6 @@ private:
     struct _Vertex {
         std::list<_EdgeLabel> _incidentEdges;
         VertexData _data;
-
         template<typename... Args>
         explicit _Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
     };
@@ -350,98 +342,98 @@ private:
     _VertexList _vertices;
     _EdgeList   _edges;
 
-    template<bool isConst> class _VertexIteratorImpl;
-    template<bool isConst> class _EdgeIteratorImpl;
-
+    // ---------- Descriptors ----------
     template<bool isConst>
-    class _EdgeProxy {
+    class _VertexDescriptor {
     private:
-        using _ConditionalEdgeLabel = std::conditional_t<isConst,
-                                                         _EdgeConstLabel,
-                                                         _EdgeLabel>;
-
-        _ConditionalEdgeLabel _label;
-
-    public:
-        explicit _EdgeProxy(_ConditionalEdgeLabel label) : _label(label) {}
-
-        using _ConditionalVertexIterator = std::conditional_t<isConst,
-                                                              _VertexIteratorImpl<true>,
-                                                              _VertexIteratorImpl<false>>;
-
-        _ConditionalVertexIterator v1() const { return _ConditionalVertexIterator(_label->_v1); }
-        _ConditionalVertexIterator v2() const { return _ConditionalVertexIterator(_label->_v2); }
-
-        _ConditionalVertexIterator otherEnd(_ConditionalVertexIterator vertex) const {
-            if (vertex._it == _label->_v1) return _ConditionalVertexIterator(_label->_v2);
-            else if (vertex._it == _label->_v2) return _ConditionalVertexIterator(_label->_v1);
-            else throw std::invalid_argument("Vertex is not incident to this edge");
-        }
-
-        auto& data()
-            requires (!std::is_void_v<EdgeData>)
-        { return _label->_data; }
-
-        const auto& data() const
-            requires (!std::is_void_v<EdgeData>)
-        { return _label->_data; }
-    };
-
-    template<bool isConst>
-    class _VertexProxy {
-    private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst,
-                                                           _VertexConstLabel,
-                                                           _VertexLabel>;
-
+        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _label;
 
+        friend class UndirectedAbstractGraph;
+
     public:
-        explicit _VertexProxy(_ConditionalVertexLabel label) : _label(label) {}
+        _VertexDescriptor() = default;
+        _VertexDescriptor(const _VertexDescriptor&) = default;
+        _VertexDescriptor& operator=(const _VertexDescriptor&) = default;
 
-        using _ConditionalDataRef = std::conditional_t<isConst,
-                                                       const VertexData&,
-                                                       VertexData&>;
+        explicit _VertexDescriptor(_ConditionalVertexLabel label) : _label(label) {}
 
-        _ConditionalDataRef data() const { return _label->_data; }
+        // Conversion from non-const to const
+        _VertexDescriptor(const _VertexDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!isConst) { return _label->_data; }
+        const auto& data() const               { return _label->_data; }
 
         auto incidentEdges() const {
-            return std::views::transform(_label->_incidentEdges, [](const _EdgeLabel& el) {
-                return _EdgeProxy<isConst>(el);
-            });
+            return std::views::transform(_label->_incidentEdges,
+                                         [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
     };
 
+    template<bool isConst>
+    class _EdgeDescriptor {
+    private:
+        using _ConditionalEdgeLabel = std::conditional_t<isConst, _EdgeConstLabel, _EdgeLabel>;
+        _ConditionalEdgeLabel _label;
+
+        friend class UndirectedAbstractGraph;
+
+    public:
+        _EdgeDescriptor() = default;
+        _EdgeDescriptor(const _EdgeDescriptor&) = default;
+        _EdgeDescriptor& operator=(const _EdgeDescriptor&) = default;
+
+        explicit _EdgeDescriptor(_ConditionalEdgeLabel label) : _label(label) {}
+
+        _EdgeDescriptor(const _EdgeDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!std::is_void_v<EdgeData> && !isConst) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<EdgeData>) { return _label->_data; }
+
+        _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
+        _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
+
+        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+            if (vertex._label == _label->_v1)
+                return _VertexDescriptor<isConst>(_label->_v2);
+            else if (vertex._label == _label->_v2)
+                return _VertexDescriptor<isConst>(_label->_v1);
+            else
+                throw std::invalid_argument("Vertex is not incident to this edge");
+        }
+    };
+
+    // ---------- Iterators ----------
     template<bool isConst>
     class _VertexIteratorImpl {
     private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst,
-                                                           _VertexConstLabel,
-                                                           _VertexLabel>;
-
+        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _it;
 
         friend class UndirectedAbstractGraph;
 
     public:
-        using value_type = _VertexProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _VertexDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _VertexIteratorImpl() = default;
         _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
         _VertexIteratorImpl& operator=(const _VertexIteratorImpl&) = default;
 
-        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
-           : _it(other._it) {}
-
         explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
 
-        value_type operator*() const { return value_type(_it); }
+        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+            : _it(other._it) {}
+
+        reference operator*() const { return value_type(_it); }
         _VertexIteratorImpl& operator++() { ++_it; return *this; }
-        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _VertexIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _VertexIteratorImpl& other) const { return !(*this == other); }
@@ -450,132 +442,139 @@ private:
     template<bool isConst>
     class _EdgeIteratorImpl {
     private:
-        using _ConditionalEdgeLabel = std::conditional_t<isConst,
-                                                         _EdgeConstLabel,
-                                                         _EdgeLabel>;
-
+        using _ConditionalEdgeLabel = std::conditional_t<isConst, _EdgeConstLabel, _EdgeLabel>;
         _ConditionalEdgeLabel _it;
 
         friend class UndirectedAbstractGraph;
 
     public:
-        using value_type = _EdgeProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _EdgeDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _EdgeIteratorImpl() = default;
         _EdgeIteratorImpl(const _EdgeIteratorImpl&) = default;
         _EdgeIteratorImpl& operator=(const _EdgeIteratorImpl&) = default;
 
+        explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
+
         _EdgeIteratorImpl(const _EdgeIteratorImpl<false>& other) requires isConst
             : _it(other._it) {}
 
-        explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
-
-        value_type operator*() const { return value_type(_it); }
+        reference operator*() const { return value_type(_it); }
         _EdgeIteratorImpl& operator++() { ++_it; return *this; }
-        _EdgeIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _EdgeIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _EdgeIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _EdgeIteratorImpl& other) const { return !(*this == other); }
     };
 
 public:
+    // Public types
+    using VertexDescriptor      = _VertexDescriptor<false>;
+    using ConstVertexDescriptor = _VertexDescriptor<true>;
+    using EdgeDescriptor        = _EdgeDescriptor<false>;
+    using ConstEdgeDescriptor   = _EdgeDescriptor<true>;
+
     using VertexIterator      = _VertexIteratorImpl<false>;
     using ConstVertexIterator = _VertexIteratorImpl<true>;
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
-    using VertexProxy = _VertexProxy<false>;
-    using ConstVertexProxy = _VertexProxy<true>;
-    using EdgeProxy = _EdgeProxy<false>;
-    using ConstEdgeProxy = _EdgeProxy<true>;
-
+    // ---------- Vertex operations ----------
     template<typename... Args>
-    VertexIterator emplaceVertex(Args&&... args) {
+    VertexDescriptor emplaceVertex(Args&&... args) {
         _vertices.emplace_back(std::forward<Args>(args)...);
-        auto it = _vertices.end();
-        --it;
-        return VertexIterator(it);
+        auto it = std::prev(_vertices.end());
+        return VertexDescriptor(it);
     }
 
-    VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(ConstVertexIterator vertexIt) {
-        auto incidentCopy = vertexIt._it->_incidentEdges;
-        for (auto edgeIt : incidentCopy) {
-            removeEdge(EdgeIterator(edgeIt));
+    void removeVertex(VertexDescriptor vertex) {
+        // Make a copy because the incident edge list will be modified during iteration
+        auto incidentCopy = vertex._label->_incidentEdges;
+        for (auto edgeLabel : incidentCopy) {
+            removeEdge(EdgeDescriptor(edgeLabel));
         }
-        _vertices.erase(vertexIt._it);
+        _vertices.erase(vertex._label);
     }
 
+    // ---------- Edge operations ----------
     template<typename... Args>
         requires (!std::is_void_v<EdgeData>)
-    EdgeIterator emplaceEdge(VertexIterator from, VertexIterator to, Args&&... args) {
-        _edges.emplace_back(from._it, to._it, std::forward<Args>(args)...);
-        auto edgeIt = std::prev(_edges.end());
-
-        from._it->_incidentEdges.push_back(edgeIt);
-        to._it->_incidentEdges.push_back(edgeIt);
-
-        edgeIt->_meta._posInV1 = std::prev(from._it->_incidentEdges.end());
-        edgeIt->_meta._posInV2 = std::prev(to._it->_incidentEdges.end());
-
-        return EdgeIterator(edgeIt);
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+        _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
+        auto it = std::prev(_edges.end());
+        from._label->_incidentEdges.push_back(it);
+        to._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
+        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        return EdgeDescriptor(it);
     }
 
-    EdgeIterator addEdge(VertexIterator from,
-                         VertexIterator to,
-                         const EdgeData& data)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
         requires (!std::is_void_v<EdgeData>)
     { return emplaceEdge(from, to, data); }
 
-    EdgeIterator addEdge(VertexIterator from, VertexIterator to)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
-        _edges.emplace_back(from._it, to._it);
-        auto edgeIt = std::prev(_edges.end());
-
-        from._it->_incidentEdges.push_back(edgeIt);
-        to._it->_incidentEdges.push_back(edgeIt);
-
-        edgeIt->_meta._posInV1 = std::prev(from._it->_incidentEdges.end());
-        edgeIt->_meta._posInV2 = std::prev(to._it->_incidentEdges.end());
-
-        return EdgeIterator(edgeIt);
+        _edges.emplace_back(from._label, to._label);
+        auto it = std::prev(_edges.end());
+        from._label->_incidentEdges.push_back(it);
+        to._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
+        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        return EdgeDescriptor(it);
     }
 
-    void removeEdge(EdgeIterator edgeIt) {
-        auto& e = *edgeIt._it;
-        e._v1->_incidentEdges.erase(e._meta._posInV1);
-        e._v2->_incidentEdges.erase(e._meta._posInV2);
-        _edges.erase(edgeIt._it);
+    void removeEdge(EdgeDescriptor edge) {
+        edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
+        edge._label->_v2->_incidentEdges.erase(edge._label->_meta._posInV2);
+        _edges.erase(edge._label);
     }
 
-    VertexIterator      beginVertices()        { return VertexIterator(_vertices.begin()); }
-    VertexIterator      endVertices()          { return VertexIterator(_vertices.end()); }
-    ConstVertexIterator beginVertices()  const { return ConstVertexIterator(_vertices.begin()); }
-    ConstVertexIterator endVertices()    const { return ConstVertexIterator(_vertices.end()); }
+    // ---------- Vertex iteration ----------
+    VertexIterator beginVertices() { return VertexIterator(_vertices.begin()); }
+    VertexIterator endVertices()   { return VertexIterator(_vertices.end()); }
+    ConstVertexIterator beginVertices() const { return ConstVertexIterator(_vertices.begin()); }
+    ConstVertexIterator endVertices()   const { return ConstVertexIterator(_vertices.end()); }
     ConstVertexIterator cbeginVertices() const { return ConstVertexIterator(_vertices.begin()); }
     ConstVertexIterator cendVertices()   const { return ConstVertexIterator(_vertices.end()); }
 
-    auto vertices()            { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto vertices()      const { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto constVertices() const { return std::ranges::subrange(cbeginVertices(), cendVertices()); }
+    auto vertices() {
+        return std::ranges::subrange<VertexIterator, VertexIterator>(beginVertices(), endVertices());
+    }
+    auto vertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(beginVertices(), endVertices());
+    }
+    auto constVertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(cbeginVertices(), cendVertices());
+    }
 
-    EdgeIterator      beginEdges()        { return EdgeIterator(_edges.begin()); }
-    EdgeIterator      endEdges()          { return EdgeIterator(_edges.end()); }
-    ConstEdgeIterator beginEdges()  const { return ConstEdgeIterator(_edges.begin()); }
-    ConstEdgeIterator endEdges()    const { return ConstEdgeIterator(_edges.end()); }
+    // ---------- Edge iteration ----------
+    EdgeIterator beginEdges() { return EdgeIterator(_edges.begin()); }
+    EdgeIterator endEdges()   { return EdgeIterator(_edges.end()); }
+    ConstEdgeIterator beginEdges() const { return ConstEdgeIterator(_edges.begin()); }
+    ConstEdgeIterator endEdges()   const { return ConstEdgeIterator(_edges.end()); }
     ConstEdgeIterator cbeginEdges() const { return ConstEdgeIterator(_edges.begin()); }
     ConstEdgeIterator cendEdges()   const { return ConstEdgeIterator(_edges.end()); }
 
-    auto edges()            { return std::ranges::subrange(beginEdges(), endEdges()); }
-    auto edges()      const { return std::ranges::subrange(beginEdges(), endEdges()); }
-    auto constEdges() const { return std::ranges::subrange(cbeginEdges(), cendEdges()); }
+    auto edges() {
+        return std::ranges::subrange<EdgeIterator, EdgeIterator>(beginEdges(), endEdges());
+    }
+    auto edges() const {
+        return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(beginEdges(), endEdges());
+    }
+    auto constEdges() const {
+        return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(cbeginEdges(), cendEdges());
+    }
 
+    // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
 };
@@ -636,6 +635,13 @@ public:
         _cols = list.begin()->size();
         _storage.reserve(_rows * _cols);
         std::ranges::copy(list | std::views::join, _storage.begin());
+    }
+
+    MatrixOwningView(const std::vector<std::vector<T>>& vec) {
+        _rows = vec.size();
+        _cols = vec.begin()->size();
+        _storage.reserve(_rows * _cols);
+        std::ranges::copy(vec | std::views::join, _storage.begin());
     }
 
     template<MatrixLike Mat>
@@ -764,6 +770,8 @@ concept MatrixProvadingDataView = requires(M m, std::size_t i, std::size_t j) {
 
 #include <list>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 
 namespace exx::incident {
 
@@ -791,18 +799,13 @@ private:
     struct _Edge {
         _VertexLabel _v1;
         _VertexLabel _v2;
-
-        [[no_unique_address]]
-        _EdgeData _data;
-
-        _EraseAccelerationMetaData _meta{};   // метаданные заполняются ПОСЛЕ вставки
+        [[no_unique_address]] _EdgeData _data;
+        _EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
             requires (!std::is_void_v<EdgeData>)
-        _Edge(_VertexLabel v1, _VertexLabel v2, Args&&... args) :
-            _v1(v1),
-            _v2(v2),
-            _data(std::forward<Args>(args)...) {}
+        _Edge(_VertexLabel v1, _VertexLabel v2, Args&&... args)
+            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
 
         _Edge(_VertexLabel v1, _VertexLabel v2)
             requires (std::is_void_v<EdgeData>)
@@ -812,7 +815,6 @@ private:
     struct _Vertex {
         std::list<_EdgeLabel> _incidentEdges;
         VertexData _data;
-
         template<typename... Args>
         explicit _Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
     };
@@ -820,98 +822,98 @@ private:
     _VertexList _vertices;
     _EdgeList   _edges;
 
-    template<bool isConst> class _VertexIteratorImpl;
-    template<bool isConst> class _EdgeIteratorImpl;
-
+    // ---------- Descriptors ----------
     template<bool isConst>
-    class _EdgeProxy {
+    class _VertexDescriptor {
     private:
-        using _ConditionalEdgeLabel = std::conditional_t<isConst,
-                                                         _EdgeConstLabel,
-                                                         _EdgeLabel>;
-
-        _ConditionalEdgeLabel _label;
-
-    public:
-        explicit _EdgeProxy(_ConditionalEdgeLabel label) : _label(label) {}
-
-        using _ConditionalVertexIterator = std::conditional_t<isConst,
-                                                              _VertexIteratorImpl<true>,
-                                                              _VertexIteratorImpl<false>>;
-
-        _ConditionalVertexIterator v1() const { return _ConditionalVertexIterator(_label->_v1); }
-        _ConditionalVertexIterator v2() const { return _ConditionalVertexIterator(_label->_v2); }
-
-        _ConditionalVertexIterator otherEnd(_ConditionalVertexIterator vertex) const {
-            if (vertex._it == _label->_v1) return _ConditionalVertexIterator(_label->_v2);
-            else if (vertex._it == _label->_v2) return _ConditionalVertexIterator(_label->_v1);
-            else throw std::invalid_argument("Vertex is not incident to this edge");
-        }
-
-        auto& data()
-            requires (!std::is_void_v<EdgeData>)
-        { return _label->_data; }
-
-        const auto& data() const
-            requires (!std::is_void_v<EdgeData>)
-        { return _label->_data; }
-    };
-
-    template<bool isConst>
-    class _VertexProxy {
-    private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst,
-                                                           _VertexConstLabel,
-                                                           _VertexLabel>;
-
+        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _label;
 
+        friend class UndirectedAbstractGraph;
+
     public:
-        explicit _VertexProxy(_ConditionalVertexLabel label) : _label(label) {}
+        _VertexDescriptor() = default;
+        _VertexDescriptor(const _VertexDescriptor&) = default;
+        _VertexDescriptor& operator=(const _VertexDescriptor&) = default;
 
-        using _ConditionalDataRef = std::conditional_t<isConst,
-                                                       const VertexData&,
-                                                       VertexData&>;
+        explicit _VertexDescriptor(_ConditionalVertexLabel label) : _label(label) {}
 
-        _ConditionalDataRef data() const { return _label->_data; }
+        // Conversion from non-const to const
+        _VertexDescriptor(const _VertexDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!isConst) { return _label->_data; }
+        const auto& data() const               { return _label->_data; }
 
         auto incidentEdges() const {
-            return std::views::transform(_label->_incidentEdges, [](const _EdgeLabel& el) {
-                return _EdgeProxy<isConst>(el);
-            });
+            return std::views::transform(_label->_incidentEdges,
+                                         [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
     };
 
+    template<bool isConst>
+    class _EdgeDescriptor {
+    private:
+        using _ConditionalEdgeLabel = std::conditional_t<isConst, _EdgeConstLabel, _EdgeLabel>;
+        _ConditionalEdgeLabel _label;
+
+        friend class UndirectedAbstractGraph;
+
+    public:
+        _EdgeDescriptor() = default;
+        _EdgeDescriptor(const _EdgeDescriptor&) = default;
+        _EdgeDescriptor& operator=(const _EdgeDescriptor&) = default;
+
+        explicit _EdgeDescriptor(_ConditionalEdgeLabel label) : _label(label) {}
+
+        _EdgeDescriptor(const _EdgeDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!std::is_void_v<EdgeData> && !isConst) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<EdgeData>) { return _label->_data; }
+
+        _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
+        _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
+
+        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+            if (vertex._label == _label->_v1)
+                return _VertexDescriptor<isConst>(_label->_v2);
+            else if (vertex._label == _label->_v2)
+                return _VertexDescriptor<isConst>(_label->_v1);
+            else
+                throw std::invalid_argument("Vertex is not incident to this edge");
+        }
+    };
+
+    // ---------- Iterators ----------
     template<bool isConst>
     class _VertexIteratorImpl {
     private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst,
-                                                           _VertexConstLabel,
-                                                           _VertexLabel>;
-
+        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _it;
 
         friend class UndirectedAbstractGraph;
 
     public:
-        using value_type = _VertexProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _VertexDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _VertexIteratorImpl() = default;
         _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
         _VertexIteratorImpl& operator=(const _VertexIteratorImpl&) = default;
 
-        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
-           : _it(other._it) {}
-
         explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
 
-        value_type operator*() const { return value_type(_it); }
+        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+            : _it(other._it) {}
+
+        reference operator*() const { return value_type(_it); }
         _VertexIteratorImpl& operator++() { ++_it; return *this; }
-        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _VertexIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _VertexIteratorImpl& other) const { return !(*this == other); }
@@ -920,132 +922,139 @@ private:
     template<bool isConst>
     class _EdgeIteratorImpl {
     private:
-        using _ConditionalEdgeLabel = std::conditional_t<isConst,
-                                                         _EdgeConstLabel,
-                                                         _EdgeLabel>;
-
+        using _ConditionalEdgeLabel = std::conditional_t<isConst, _EdgeConstLabel, _EdgeLabel>;
         _ConditionalEdgeLabel _it;
 
         friend class UndirectedAbstractGraph;
 
     public:
-        using value_type = _EdgeProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _EdgeDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _EdgeIteratorImpl() = default;
         _EdgeIteratorImpl(const _EdgeIteratorImpl&) = default;
         _EdgeIteratorImpl& operator=(const _EdgeIteratorImpl&) = default;
 
+        explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
+
         _EdgeIteratorImpl(const _EdgeIteratorImpl<false>& other) requires isConst
             : _it(other._it) {}
 
-        explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
-
-        value_type operator*() const { return value_type(_it); }
+        reference operator*() const { return value_type(_it); }
         _EdgeIteratorImpl& operator++() { ++_it; return *this; }
-        _EdgeIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _EdgeIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _EdgeIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _EdgeIteratorImpl& other) const { return !(*this == other); }
     };
 
 public:
+    // Public types
+    using VertexDescriptor      = _VertexDescriptor<false>;
+    using ConstVertexDescriptor = _VertexDescriptor<true>;
+    using EdgeDescriptor        = _EdgeDescriptor<false>;
+    using ConstEdgeDescriptor   = _EdgeDescriptor<true>;
+
     using VertexIterator      = _VertexIteratorImpl<false>;
     using ConstVertexIterator = _VertexIteratorImpl<true>;
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
-    using VertexProxy = _VertexProxy<false>;
-    using ConstVertexProxy = _VertexProxy<true>;
-    using EdgeProxy = _EdgeProxy<false>;
-    using ConstEdgeProxy = _EdgeProxy<true>;
-
+    // ---------- Vertex operations ----------
     template<typename... Args>
-    VertexIterator emplaceVertex(Args&&... args) {
+    VertexDescriptor emplaceVertex(Args&&... args) {
         _vertices.emplace_back(std::forward<Args>(args)...);
-        auto it = _vertices.end();
-        --it;
-        return VertexIterator(it);
+        auto it = std::prev(_vertices.end());
+        return VertexDescriptor(it);
     }
 
-    VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(ConstVertexIterator vertexIt) {
-        auto incidentCopy = vertexIt._it->_incidentEdges;
-        for (auto edgeIt : incidentCopy) {
-            removeEdge(EdgeIterator(edgeIt));
+    void removeVertex(VertexDescriptor vertex) {
+        // Make a copy because the incident edge list will be modified during iteration
+        auto incidentCopy = vertex._label->_incidentEdges;
+        for (auto edgeLabel : incidentCopy) {
+            removeEdge(EdgeDescriptor(edgeLabel));
         }
-        _vertices.erase(vertexIt._it);
+        _vertices.erase(vertex._label);
     }
 
+    // ---------- Edge operations ----------
     template<typename... Args>
         requires (!std::is_void_v<EdgeData>)
-    EdgeIterator emplaceEdge(VertexIterator from, VertexIterator to, Args&&... args) {
-        _edges.emplace_back(from._it, to._it, std::forward<Args>(args)...);
-        auto edgeIt = std::prev(_edges.end());
-
-        from._it->_incidentEdges.push_back(edgeIt);
-        to._it->_incidentEdges.push_back(edgeIt);
-
-        edgeIt->_meta._posInV1 = std::prev(from._it->_incidentEdges.end());
-        edgeIt->_meta._posInV2 = std::prev(to._it->_incidentEdges.end());
-
-        return EdgeIterator(edgeIt);
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+        _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
+        auto it = std::prev(_edges.end());
+        from._label->_incidentEdges.push_back(it);
+        to._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
+        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        return EdgeDescriptor(it);
     }
 
-    EdgeIterator addEdge(VertexIterator from,
-                         VertexIterator to,
-                         const EdgeData& data)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
         requires (!std::is_void_v<EdgeData>)
     { return emplaceEdge(from, to, data); }
 
-    EdgeIterator addEdge(VertexIterator from, VertexIterator to)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
-        _edges.emplace_back(from._it, to._it);
-        auto edgeIt = std::prev(_edges.end());
-
-        from._it->_incidentEdges.push_back(edgeIt);
-        to._it->_incidentEdges.push_back(edgeIt);
-
-        edgeIt->_meta._posInV1 = std::prev(from._it->_incidentEdges.end());
-        edgeIt->_meta._posInV2 = std::prev(to._it->_incidentEdges.end());
-
-        return EdgeIterator(edgeIt);
+        _edges.emplace_back(from._label, to._label);
+        auto it = std::prev(_edges.end());
+        from._label->_incidentEdges.push_back(it);
+        to._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
+        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        return EdgeDescriptor(it);
     }
 
-    void removeEdge(EdgeIterator edgeIt) {
-        auto& e = *edgeIt._it;
-        e._v1->_incidentEdges.erase(e._meta._posInV1);
-        e._v2->_incidentEdges.erase(e._meta._posInV2);
-        _edges.erase(edgeIt._it);
+    void removeEdge(EdgeDescriptor edge) {
+        edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
+        edge._label->_v2->_incidentEdges.erase(edge._label->_meta._posInV2);
+        _edges.erase(edge._label);
     }
 
-    VertexIterator      beginVertices()        { return VertexIterator(_vertices.begin()); }
-    VertexIterator      endVertices()          { return VertexIterator(_vertices.end()); }
-    ConstVertexIterator beginVertices()  const { return ConstVertexIterator(_vertices.begin()); }
-    ConstVertexIterator endVertices()    const { return ConstVertexIterator(_vertices.end()); }
+    // ---------- Vertex iteration ----------
+    VertexIterator beginVertices() { return VertexIterator(_vertices.begin()); }
+    VertexIterator endVertices()   { return VertexIterator(_vertices.end()); }
+    ConstVertexIterator beginVertices() const { return ConstVertexIterator(_vertices.begin()); }
+    ConstVertexIterator endVertices()   const { return ConstVertexIterator(_vertices.end()); }
     ConstVertexIterator cbeginVertices() const { return ConstVertexIterator(_vertices.begin()); }
     ConstVertexIterator cendVertices()   const { return ConstVertexIterator(_vertices.end()); }
 
-    auto vertices()            { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto vertices()      const { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto constVertices() const { return std::ranges::subrange(cbeginVertices(), cendVertices()); }
+    auto vertices() {
+        return std::ranges::subrange<VertexIterator, VertexIterator>(beginVertices(), endVertices());
+    }
+    auto vertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(beginVertices(), endVertices());
+    }
+    auto constVertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(cbeginVertices(), cendVertices());
+    }
 
-    EdgeIterator      beginEdges()        { return EdgeIterator(_edges.begin()); }
-    EdgeIterator      endEdges()          { return EdgeIterator(_edges.end()); }
-    ConstEdgeIterator beginEdges()  const { return ConstEdgeIterator(_edges.begin()); }
-    ConstEdgeIterator endEdges()    const { return ConstEdgeIterator(_edges.end()); }
+    // ---------- Edge iteration ----------
+    EdgeIterator beginEdges() { return EdgeIterator(_edges.begin()); }
+    EdgeIterator endEdges()   { return EdgeIterator(_edges.end()); }
+    ConstEdgeIterator beginEdges() const { return ConstEdgeIterator(_edges.begin()); }
+    ConstEdgeIterator endEdges()   const { return ConstEdgeIterator(_edges.end()); }
     ConstEdgeIterator cbeginEdges() const { return ConstEdgeIterator(_edges.begin()); }
     ConstEdgeIterator cendEdges()   const { return ConstEdgeIterator(_edges.end()); }
 
-    auto edges()            { return std::ranges::subrange(beginEdges(), endEdges()); }
-    auto edges()      const { return std::ranges::subrange(beginEdges(), endEdges()); }
-    auto constEdges() const { return std::ranges::subrange(cbeginEdges(), cendEdges()); }
+    auto edges() {
+        return std::ranges::subrange<EdgeIterator, EdgeIterator>(beginEdges(), endEdges());
+    }
+    auto edges() const {
+        return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(beginEdges(), endEdges());
+    }
+    auto constEdges() const {
+        return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(cbeginEdges(), cendEdges());
+    }
 
+    // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
 };
@@ -1103,6 +1112,13 @@ public:
         _cols = list.begin()->size();
         _storage.reserve(_rows * _cols);
         std::ranges::copy(list | std::views::join, _storage.begin());
+    }
+
+    MatrixOwningView(const std::vector<std::vector<T>>& vec) {
+        _rows = vec.size();
+        _cols = vec.begin()->size();
+        _storage.reserve(_rows * _cols);
+        std::ranges::copy(vec | std::views::join, _storage.begin());
     }
 
     template<MatrixLike Mat>
@@ -1203,18 +1219,17 @@ make_graph_from_matrix(const MatrixView<EdgeData>& mat, EdgeData noEdgeValue) {
     }
 
     UndirectedAbstractGraph<VertexData, EdgeData> g;
-    std::vector<typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexIterator> vertIters;
-    vertIters.reserve(n);
+    std::vector<typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor> vertDescrs;
+    vertDescrs.reserve(n);
 
-    for (size_t i = 0; i < n; ++i) {
-        vertIters.push_back(g.addVertex(VertexData{static_cast<VertexData>(i)}));
-    }
+    for (size_t i = 0; i < n; ++i)
+        vertDescrs.push_back(g.addVertex(VertexData{static_cast<VertexData>(i)}));
 
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = i + 1; j < n; ++j) {
             EdgeData w = mat(i, j);
             if (w != noEdgeValue) {
-                g.addEdge(vertIters[i], vertIters[j], w);
+                g.addEdge(vertDescrs[i], vertDescrs[j], w);
             }
         }
     }
@@ -1233,20 +1248,9 @@ make_graph_from_matrix(std::initializer_list<std::initializer_list<EdgeData>> li
 
 template<typename VertexData, typename EdgeData>
 UndirectedAbstractGraph<VertexData, EdgeData>
-make_graph_from_matrix(std::vector<std::vector<EdgeData>> mat, EdgeData noEdgeValue = EdgeData{}) {
-    if (mat.empty()) {
-        MatrixView<EdgeData> emptyView(nullptr, 0, 0);
-        return impl::make_graph_from_matrix<VertexData, EdgeData>(emptyView, noEdgeValue);
-    }
-    std::size_t rows = mat.size();
-    std::size_t cols = mat[0].size();
-    for (const auto& row : mat) {
-        if (row.size() != cols)
-            throw std::invalid_argument("Non-rectangular matrix");
-    }
-    auto range = mat | std::views::join;
-    std::vector<EdgeData> flat(range.begin(), range.end());
-    MatrixView<EdgeData> view(flat.data(), rows, cols);
+make_graph_from_matrix(std::vector<std::vector<EdgeData>> vec, EdgeData noEdgeValue = EdgeData{}) {
+    MatrixOwningView<EdgeData> mat(vec);
+    MatrixView<EdgeData> view(mat.data(), mat.rows(), mat.cols());
     return impl::make_graph_from_matrix<VertexData, EdgeData>(view, noEdgeValue);
 }
 
@@ -1259,8 +1263,7 @@ make_graph_from_matrix(const MatrixView<EdgeData>& mat, EdgeData noEdgeValue = E
 template<typename VertexData, typename EdgeData, MatrixLike M>
 UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(M&& mat, EdgeData noEdgeValue = EdgeData{}) {
-    return impl::make_graph_from_matrix<VertexData, EdgeData>(
-        MatrixView<EdgeData>(std::forward<M>(mat)), noEdgeValue);
+    return impl::make_graph_from_matrix<VertexData, EdgeData>(MatrixView<EdgeData>(std::forward<M>(mat)), noEdgeValue);
 }
 
 } // namespace exx::incident
@@ -1281,6 +1284,8 @@ make_graph_from_matrix(M&& mat, EdgeData noEdgeValue = EdgeData{}) {
 
 #include <list>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 
 namespace exx::incident {
 
@@ -1308,18 +1313,13 @@ private:
     struct _Edge {
         _VertexLabel _v1;
         _VertexLabel _v2;
-
-        [[no_unique_address]]
-        _EdgeData _data;
-
-        _EraseAccelerationMetaData _meta{};   // метаданные заполняются ПОСЛЕ вставки
+        [[no_unique_address]] _EdgeData _data;
+        _EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
             requires (!std::is_void_v<EdgeData>)
-        _Edge(_VertexLabel v1, _VertexLabel v2, Args&&... args) :
-            _v1(v1),
-            _v2(v2),
-            _data(std::forward<Args>(args)...) {}
+        _Edge(_VertexLabel v1, _VertexLabel v2, Args&&... args)
+            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
 
         _Edge(_VertexLabel v1, _VertexLabel v2)
             requires (std::is_void_v<EdgeData>)
@@ -1329,7 +1329,6 @@ private:
     struct _Vertex {
         std::list<_EdgeLabel> _incidentEdges;
         VertexData _data;
-
         template<typename... Args>
         explicit _Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
     };
@@ -1337,98 +1336,98 @@ private:
     _VertexList _vertices;
     _EdgeList   _edges;
 
-    template<bool isConst> class _VertexIteratorImpl;
-    template<bool isConst> class _EdgeIteratorImpl;
-
+    // ---------- Descriptors ----------
     template<bool isConst>
-    class _EdgeProxy {
+    class _VertexDescriptor {
     private:
-        using _ConditionalEdgeLabel = std::conditional_t<isConst,
-                                                         _EdgeConstLabel,
-                                                         _EdgeLabel>;
-
-        _ConditionalEdgeLabel _label;
-
-    public:
-        explicit _EdgeProxy(_ConditionalEdgeLabel label) : _label(label) {}
-
-        using _ConditionalVertexIterator = std::conditional_t<isConst,
-                                                              _VertexIteratorImpl<true>,
-                                                              _VertexIteratorImpl<false>>;
-
-        _ConditionalVertexIterator v1() const { return _ConditionalVertexIterator(_label->_v1); }
-        _ConditionalVertexIterator v2() const { return _ConditionalVertexIterator(_label->_v2); }
-
-        _ConditionalVertexIterator otherEnd(_ConditionalVertexIterator vertex) const {
-            if (vertex._it == _label->_v1) return _ConditionalVertexIterator(_label->_v2);
-            else if (vertex._it == _label->_v2) return _ConditionalVertexIterator(_label->_v1);
-            else throw std::invalid_argument("Vertex is not incident to this edge");
-        }
-
-        auto& data()
-            requires (!std::is_void_v<EdgeData>)
-        { return _label->_data; }
-
-        const auto& data() const
-            requires (!std::is_void_v<EdgeData>)
-        { return _label->_data; }
-    };
-
-    template<bool isConst>
-    class _VertexProxy {
-    private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst,
-                                                           _VertexConstLabel,
-                                                           _VertexLabel>;
-
+        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _label;
 
+        friend class UndirectedAbstractGraph;
+
     public:
-        explicit _VertexProxy(_ConditionalVertexLabel label) : _label(label) {}
+        _VertexDescriptor() = default;
+        _VertexDescriptor(const _VertexDescriptor&) = default;
+        _VertexDescriptor& operator=(const _VertexDescriptor&) = default;
 
-        using _ConditionalDataRef = std::conditional_t<isConst,
-                                                       const VertexData&,
-                                                       VertexData&>;
+        explicit _VertexDescriptor(_ConditionalVertexLabel label) : _label(label) {}
 
-        _ConditionalDataRef data() const { return _label->_data; }
+        // Conversion from non-const to const
+        _VertexDescriptor(const _VertexDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!isConst) { return _label->_data; }
+        const auto& data() const               { return _label->_data; }
 
         auto incidentEdges() const {
-            return std::views::transform(_label->_incidentEdges, [](const _EdgeLabel& el) {
-                return _EdgeProxy<isConst>(el);
-            });
+            return std::views::transform(_label->_incidentEdges,
+                                         [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
     };
 
+    template<bool isConst>
+    class _EdgeDescriptor {
+    private:
+        using _ConditionalEdgeLabel = std::conditional_t<isConst, _EdgeConstLabel, _EdgeLabel>;
+        _ConditionalEdgeLabel _label;
+
+        friend class UndirectedAbstractGraph;
+
+    public:
+        _EdgeDescriptor() = default;
+        _EdgeDescriptor(const _EdgeDescriptor&) = default;
+        _EdgeDescriptor& operator=(const _EdgeDescriptor&) = default;
+
+        explicit _EdgeDescriptor(_ConditionalEdgeLabel label) : _label(label) {}
+
+        _EdgeDescriptor(const _EdgeDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!std::is_void_v<EdgeData> && !isConst) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<EdgeData>) { return _label->_data; }
+
+        _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
+        _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
+
+        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+            if (vertex._label == _label->_v1)
+                return _VertexDescriptor<isConst>(_label->_v2);
+            else if (vertex._label == _label->_v2)
+                return _VertexDescriptor<isConst>(_label->_v1);
+            else
+                throw std::invalid_argument("Vertex is not incident to this edge");
+        }
+    };
+
+    // ---------- Iterators ----------
     template<bool isConst>
     class _VertexIteratorImpl {
     private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst,
-                                                           _VertexConstLabel,
-                                                           _VertexLabel>;
-
+        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _it;
 
         friend class UndirectedAbstractGraph;
 
     public:
-        using value_type = _VertexProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _VertexDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _VertexIteratorImpl() = default;
         _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
         _VertexIteratorImpl& operator=(const _VertexIteratorImpl&) = default;
 
-        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
-           : _it(other._it) {}
-
         explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
 
-        value_type operator*() const { return value_type(_it); }
+        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+            : _it(other._it) {}
+
+        reference operator*() const { return value_type(_it); }
         _VertexIteratorImpl& operator++() { ++_it; return *this; }
-        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _VertexIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _VertexIteratorImpl& other) const { return !(*this == other); }
@@ -1437,132 +1436,139 @@ private:
     template<bool isConst>
     class _EdgeIteratorImpl {
     private:
-        using _ConditionalEdgeLabel = std::conditional_t<isConst,
-                                                         _EdgeConstLabel,
-                                                         _EdgeLabel>;
-
+        using _ConditionalEdgeLabel = std::conditional_t<isConst, _EdgeConstLabel, _EdgeLabel>;
         _ConditionalEdgeLabel _it;
 
         friend class UndirectedAbstractGraph;
 
     public:
-        using value_type = _EdgeProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _EdgeDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _EdgeIteratorImpl() = default;
         _EdgeIteratorImpl(const _EdgeIteratorImpl&) = default;
         _EdgeIteratorImpl& operator=(const _EdgeIteratorImpl&) = default;
 
+        explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
+
         _EdgeIteratorImpl(const _EdgeIteratorImpl<false>& other) requires isConst
             : _it(other._it) {}
 
-        explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
-
-        value_type operator*() const { return value_type(_it); }
+        reference operator*() const { return value_type(_it); }
         _EdgeIteratorImpl& operator++() { ++_it; return *this; }
-        _EdgeIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _EdgeIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _EdgeIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _EdgeIteratorImpl& other) const { return !(*this == other); }
     };
 
 public:
+    // Public types
+    using VertexDescriptor      = _VertexDescriptor<false>;
+    using ConstVertexDescriptor = _VertexDescriptor<true>;
+    using EdgeDescriptor        = _EdgeDescriptor<false>;
+    using ConstEdgeDescriptor   = _EdgeDescriptor<true>;
+
     using VertexIterator      = _VertexIteratorImpl<false>;
     using ConstVertexIterator = _VertexIteratorImpl<true>;
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
-    using VertexProxy = _VertexProxy<false>;
-    using ConstVertexProxy = _VertexProxy<true>;
-    using EdgeProxy = _EdgeProxy<false>;
-    using ConstEdgeProxy = _EdgeProxy<true>;
-
+    // ---------- Vertex operations ----------
     template<typename... Args>
-    VertexIterator emplaceVertex(Args&&... args) {
+    VertexDescriptor emplaceVertex(Args&&... args) {
         _vertices.emplace_back(std::forward<Args>(args)...);
-        auto it = _vertices.end();
-        --it;
-        return VertexIterator(it);
+        auto it = std::prev(_vertices.end());
+        return VertexDescriptor(it);
     }
 
-    VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(ConstVertexIterator vertexIt) {
-        auto incidentCopy = vertexIt._it->_incidentEdges;
-        for (auto edgeIt : incidentCopy) {
-            removeEdge(EdgeIterator(edgeIt));
+    void removeVertex(VertexDescriptor vertex) {
+        // Make a copy because the incident edge list will be modified during iteration
+        auto incidentCopy = vertex._label->_incidentEdges;
+        for (auto edgeLabel : incidentCopy) {
+            removeEdge(EdgeDescriptor(edgeLabel));
         }
-        _vertices.erase(vertexIt._it);
+        _vertices.erase(vertex._label);
     }
 
+    // ---------- Edge operations ----------
     template<typename... Args>
         requires (!std::is_void_v<EdgeData>)
-    EdgeIterator emplaceEdge(VertexIterator from, VertexIterator to, Args&&... args) {
-        _edges.emplace_back(from._it, to._it, std::forward<Args>(args)...);
-        auto edgeIt = std::prev(_edges.end());
-
-        from._it->_incidentEdges.push_back(edgeIt);
-        to._it->_incidentEdges.push_back(edgeIt);
-
-        edgeIt->_meta._posInV1 = std::prev(from._it->_incidentEdges.end());
-        edgeIt->_meta._posInV2 = std::prev(to._it->_incidentEdges.end());
-
-        return EdgeIterator(edgeIt);
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+        _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
+        auto it = std::prev(_edges.end());
+        from._label->_incidentEdges.push_back(it);
+        to._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
+        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        return EdgeDescriptor(it);
     }
 
-    EdgeIterator addEdge(VertexIterator from,
-                         VertexIterator to,
-                         const EdgeData& data)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
         requires (!std::is_void_v<EdgeData>)
     { return emplaceEdge(from, to, data); }
 
-    EdgeIterator addEdge(VertexIterator from, VertexIterator to)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
-        _edges.emplace_back(from._it, to._it);
-        auto edgeIt = std::prev(_edges.end());
-
-        from._it->_incidentEdges.push_back(edgeIt);
-        to._it->_incidentEdges.push_back(edgeIt);
-
-        edgeIt->_meta._posInV1 = std::prev(from._it->_incidentEdges.end());
-        edgeIt->_meta._posInV2 = std::prev(to._it->_incidentEdges.end());
-
-        return EdgeIterator(edgeIt);
+        _edges.emplace_back(from._label, to._label);
+        auto it = std::prev(_edges.end());
+        from._label->_incidentEdges.push_back(it);
+        to._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
+        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        return EdgeDescriptor(it);
     }
 
-    void removeEdge(EdgeIterator edgeIt) {
-        auto& e = *edgeIt._it;
-        e._v1->_incidentEdges.erase(e._meta._posInV1);
-        e._v2->_incidentEdges.erase(e._meta._posInV2);
-        _edges.erase(edgeIt._it);
+    void removeEdge(EdgeDescriptor edge) {
+        edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
+        edge._label->_v2->_incidentEdges.erase(edge._label->_meta._posInV2);
+        _edges.erase(edge._label);
     }
 
-    VertexIterator      beginVertices()        { return VertexIterator(_vertices.begin()); }
-    VertexIterator      endVertices()          { return VertexIterator(_vertices.end()); }
-    ConstVertexIterator beginVertices()  const { return ConstVertexIterator(_vertices.begin()); }
-    ConstVertexIterator endVertices()    const { return ConstVertexIterator(_vertices.end()); }
+    // ---------- Vertex iteration ----------
+    VertexIterator beginVertices() { return VertexIterator(_vertices.begin()); }
+    VertexIterator endVertices()   { return VertexIterator(_vertices.end()); }
+    ConstVertexIterator beginVertices() const { return ConstVertexIterator(_vertices.begin()); }
+    ConstVertexIterator endVertices()   const { return ConstVertexIterator(_vertices.end()); }
     ConstVertexIterator cbeginVertices() const { return ConstVertexIterator(_vertices.begin()); }
     ConstVertexIterator cendVertices()   const { return ConstVertexIterator(_vertices.end()); }
 
-    auto vertices()            { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto vertices()      const { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto constVertices() const { return std::ranges::subrange(cbeginVertices(), cendVertices()); }
+    auto vertices() {
+        return std::ranges::subrange<VertexIterator, VertexIterator>(beginVertices(), endVertices());
+    }
+    auto vertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(beginVertices(), endVertices());
+    }
+    auto constVertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(cbeginVertices(), cendVertices());
+    }
 
-    EdgeIterator      beginEdges()        { return EdgeIterator(_edges.begin()); }
-    EdgeIterator      endEdges()          { return EdgeIterator(_edges.end()); }
-    ConstEdgeIterator beginEdges()  const { return ConstEdgeIterator(_edges.begin()); }
-    ConstEdgeIterator endEdges()    const { return ConstEdgeIterator(_edges.end()); }
+    // ---------- Edge iteration ----------
+    EdgeIterator beginEdges() { return EdgeIterator(_edges.begin()); }
+    EdgeIterator endEdges()   { return EdgeIterator(_edges.end()); }
+    ConstEdgeIterator beginEdges() const { return ConstEdgeIterator(_edges.begin()); }
+    ConstEdgeIterator endEdges()   const { return ConstEdgeIterator(_edges.end()); }
     ConstEdgeIterator cbeginEdges() const { return ConstEdgeIterator(_edges.begin()); }
     ConstEdgeIterator cendEdges()   const { return ConstEdgeIterator(_edges.end()); }
 
-    auto edges()            { return std::ranges::subrange(beginEdges(), endEdges()); }
-    auto edges()      const { return std::ranges::subrange(beginEdges(), endEdges()); }
-    auto constEdges() const { return std::ranges::subrange(cbeginEdges(), cendEdges()); }
+    auto edges() {
+        return std::ranges::subrange<EdgeIterator, EdgeIterator>(beginEdges(), endEdges());
+    }
+    auto edges() const {
+        return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(beginEdges(), endEdges());
+    }
+    auto constEdges() const {
+        return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(cbeginEdges(), cendEdges());
+    }
 
+    // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
 };
@@ -1585,12 +1591,12 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
     using _Graph = UndirectedAbstractGraph<VertexData, EdgeData>;
 
     using _СHashMap = std::unordered_map<VertexData,
-                                       typename _Graph::ConstVertexIterator,
+                                       typename _Graph::ConstVertexDescriptor,
                                        VHash,
                                        VEqual>;
 
     using _HashMap = std::unordered_map<VertexData,
-                                        typename _Graph::VertexIterator,
+                                        typename _Graph::VertexDescriptor,
                                         VHash,
                                         VEqual>;
 
@@ -1605,17 +1611,16 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
 
     if (graph.vertexCount() == 0) return _Graph{};
 
-    _СHashMap originalVerticesIteratorsCollection(0, vHash, vEqual);
+    _СHashMap originalVerticesDescriptorsCollection(0, vHash, vEqual);
 
-    for (auto vit = graph.cbeginVertices(); vit != graph.cendVertices(); ++vit)
-        originalVerticesIteratorsCollection[(*vit).data()] = vit;
+    for (auto vD : graph.constVertices()) originalVerticesDescriptorsCollection.insert( { vD.data(), vD } );
 
     _Graph mst;
-    _HashMap mstVerticesIteratorsCollection(0, vHash, vEqual);
+    _HashMap mstVerticesDescriptorsCollection(0, vHash, vEqual);
 
-    for (const auto& [vData, _] : originalVerticesIteratorsCollection) {
+    for (const auto& [vData, _] : originalVerticesDescriptorsCollection) {
         VertexData id = vData;
-        mstVerticesIteratorsCollection[id] = mst.addVertex(id);
+        mstVerticesDescriptorsCollection[id] = mst.addVertex(id);
     }
 
     if (graph.edgeCount() == 0) return mst;
@@ -1631,13 +1636,13 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
     std::priority_queue<_QueueEl, std::vector<_QueueEl>, decltype(cmp)> pq(cmp);
 
     std::unordered_set<VertexData, VHash, VEqual> visited(0, vHash, vEqual);
-    VertexData startData = originalVerticesIteratorsCollection.begin()->first;
+    VertexData startData = originalVerticesDescriptorsCollection.begin()->first;
     visited.insert(startData);
 
-    auto startIt = originalVerticesIteratorsCollection[startData];
-    for (auto edge : (*startIt).incidentEdges()) {
-        auto other = edge.otherEnd(startIt);
-        VertexData otherData = (*other).data();
+    auto startDescr = originalVerticesDescriptorsCollection[startData];
+    for (auto edge : startDescr.incidentEdges()) {
+        auto other = edge.otherEnd(startDescr);
+        VertexData otherData = other.data();
         EdgeData w = edge.data();
         pq.push( { w, otherData, startData } );
     }
@@ -1648,14 +1653,14 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
         if (visited.contains(vData)) continue;
 
         visited.insert(vData);
-        mst.addEdge(mstVerticesIteratorsCollection[parentData],
-                    mstVerticesIteratorsCollection[vData],
+        mst.addEdge(mstVerticesDescriptorsCollection[parentData],
+                    mstVerticesDescriptorsCollection[vData],
                     w);
 
-        auto vIt = originalVerticesIteratorsCollection[vData];
-        for (auto edge : (*vIt).incidentEdges()) {
-            auto other = edge.otherEnd(vIt);
-            VertexData otherData = (*other).data();
+        auto vDescr = originalVerticesDescriptorsCollection[vData];
+        for (auto edge : vDescr.incidentEdges()) {
+            auto other = edge.otherEnd(vDescr);
+            VertexData otherData = other.data();
             if (!visited.contains(otherData))
                 pq.push( { edge.data(), otherData, vData } );
         }

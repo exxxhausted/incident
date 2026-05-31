@@ -45,7 +45,7 @@ You always can include all content of "Incident" immediately by using `single_he
 
 ## Directed and undirected abstract graphs
 The only one type of graph represented now (30.05.26). There is no theoretical rules and restrictions: a great opportunity to be alone with the topology.
-Iterators is only way you can access your data. Now you can bring an iterator singularity to your project).
+Descriptors is only way you can access your data. Good luck with managing your descriptor collections.
 
 ## Thats all content of initial release. Thanks LSTU for providing me motivation to do this. 
 London is the capital of Great Britain

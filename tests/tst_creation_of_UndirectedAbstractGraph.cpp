@@ -9,8 +9,8 @@ using namespace exx::incident;
 template<typename Graph>
 int getEdgeWeight(const Graph& g, int fromIdx, int toIdx) {
     for (auto edge : g.edges()) {
-        int v1 = (*edge.v1()).data();
-        int v2 = (*edge.v2()).data();
+        int v1 = edge.v1().data();
+        int v2 = edge.v2().data();
         if ((v1 == fromIdx && v2 == toIdx) || (v1 == toIdx && v2 == fromIdx)) {
             return edge.data();
         }
@@ -104,11 +104,12 @@ TEST_CASE("Graph creation from matrix views", "[graph_factory]") {
         REQUIRE(graph.vertexCount() == 3);
         REQUIRE(graph.edgeCount() == 2);
         for (auto e : graph.edges()) {
-            size_t v1 = (*e.v1()).data();
-            size_t v2 = (*e.v2()).data();
+            size_t v1 = e.v1().data();
+            size_t v2 = e.v2().data();
             double w = e.data();
             if ((v1 == 0 && v2 == 1) || (v1 == 1 && v2 == 0)) REQUIRE(w == 1.5);
             if ((v1 == 1 && v2 == 2) || (v1 == 2 && v2 == 1)) REQUIRE(w == 2.3);
         }
     }
 }
+
