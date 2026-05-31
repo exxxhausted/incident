@@ -1278,6 +1278,7 @@ make_graph_from_matrix(M&& mat, EdgeData noEdgeValue = EdgeData{}) {
 #include <unordered_set>
 #include <vector>
 #include <stdexcept>
+#include <expected>
 
 #ifndef EXX_UNDIRECTEDABSTRACTGRAPH_HPP
 #define EXX_UNDIRECTEDABSTRACTGRAPH_HPP
@@ -1579,14 +1580,29 @@ public:
 
 namespace exx::incident {
 
+enum class PrimError {
+    GraphContainsRepeatingVertexes,
+    DisconnectedGraph
+};
+
+std::string to_string(PrimError e) {
+    switch (e) {
+    case PrimError::DisconnectedGraph:
+        return "Граф не является связным";
+    case PrimError::GraphContainsRepeatingVertexes:
+        return "Граф содержит повторяющиеся вершины";
+    }
+    return "Неизвестная ошибка";
+}
+
 template<typename VertexData,
          typename EdgeData,
          typename VHash = std::hash<VertexData>,
          typename VEqual = std::equal_to<VertexData>>
-UndirectedAbstractGraph<VertexData, EdgeData>
+std::expected<UndirectedAbstractGraph<VertexData, EdgeData>, PrimError>
 mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
-             VHash vHash = VHash{},
-             VEqual vEqual = VEqual{})
+        VHash vHash = VHash{},
+        VEqual vEqual = VEqual{})
 {
     using _Graph = UndirectedAbstractGraph<VertexData, EdgeData>;
 
@@ -1605,7 +1621,7 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
         for (auto v : graph.vertices()) {
             const VertexData& data = v.data();
             if (!uniqueChecker.insert(data).second)
-                throw std::invalid_argument("mstPrim: VertexData values must be unique in the graph");
+                return std::unexpected(PrimError::GraphContainsRepeatingVertexes);
         }
     }
 
@@ -1667,7 +1683,7 @@ mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
     }
 
     if (visited.size() != graph.vertexCount())
-        throw std::logic_error("Graph is disconnected, cannot build MST");
+        return std::unexpected(PrimError::DisconnectedGraph);
 
     return mst;
 }

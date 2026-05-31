@@ -39,13 +39,13 @@ TEST_CASE("mstPrim works correctly on simple graphs", "[prim]") {
         auto mst = mstPrim(graph);
 
         // MST должен содержать 2 ребра, общий вес 1+2 = 3
-        REQUIRE(mst.vertexCount() == 3);
-        REQUIRE(mst.edgeCount() == 2);
-        REQUIRE(totalWeight(mst) == 3);
-        REQUIRE(hasEdge(mst, 0, 1, 1));
-        REQUIRE(hasEdge(mst, 0, 2, 2));
+        REQUIRE(mst->vertexCount() == 3);
+        REQUIRE(mst->edgeCount() == 2);
+        REQUIRE(totalWeight(*mst) == 3);
+        REQUIRE(hasEdge(*mst, 0, 1, 1));
+        REQUIRE(hasEdge(*mst, 0, 2, 2));
         // Ребро 1-2 (вес 3) не должно быть
-        REQUIRE_FALSE(hasEdge(mst, 1, 2, 3));
+        REQUIRE_FALSE(hasEdge(*mst, 1, 2, 3));
     }
 
     SECTION("Graph 2: square with diagonal (K4 with one missing)") {
@@ -61,16 +61,14 @@ TEST_CASE("mstPrim works correctly on simple graphs", "[prim]") {
         auto mst = mstPrim(graph);
 
         // MST должен весить 1+2+3 = 6 (рёбра 0-2, 0-1, 1-2? Нет, 1-2 даст цикл. Правильно: 0-2(1), 0-1(2), 0-3(4) – это вес 7, но есть вариант: 0-2(1), 1-2(3), 2-3(5) – вес 9; или 0-2(1), 0-1(2), 2-3(5) – вес 8. На самом деле минимальный MST: 0-2(1), 0-1(2), 2-3(5) сумма 8? Но есть 0-3(4) дешевле 5, значит: 0-2(1), 0-1(2), 0-3(4) = 7. Проверим: три ребра, все инцидентны 0, не образуют цикла. Да, это MST весом 7.
-        REQUIRE(mst.vertexCount() == 4);
-        REQUIRE(mst.edgeCount() == 3);
-        REQUIRE(totalWeight(mst) == 7);
-        REQUIRE(hasEdge(mst, 0, 1, 2));
-        REQUIRE(hasEdge(mst, 0, 2, 1));
-        REQUIRE(hasEdge(mst, 0, 3, 4));
+        REQUIRE(mst->vertexCount() == 4);
+        REQUIRE(mst->edgeCount() == 3);
+        REQUIRE(totalWeight(*mst) == 7);
+        REQUIRE(hasEdge(*mst, 0, 1, 2));
+        REQUIRE(hasEdge(*mst, 0, 2, 1));
+        REQUIRE(hasEdge(*mst, 0, 3, 4));
     }
-}
 
-TEST_CASE("mstPrim throws on invalid input", "[prim]") {
     SECTION("Duplicate vertex data") {
         // Создаём граф с двумя вершинами, у которых одинаковые данные (оба = 1)
         UndirectedAbstractGraph<int, int> g;
@@ -78,13 +76,7 @@ TEST_CASE("mstPrim throws on invalid input", "[prim]") {
         auto v2 = g.addVertex(1); // одинаковое значение
         g.addEdge(v1, v2, 10);
         // Должно выбросить исключение при вызове mstPrim
-        REQUIRE_THROWS_AS(mstPrim(g), std::invalid_argument);
-        // Проверим сообщение (опционально)
-        try {
-            mstPrim(g);
-        } catch (const std::invalid_argument& e) {
-            REQUIRE(std::string(e.what()).find("unique") != std::string::npos);
-        }
+        REQUIRE(mstPrim(g).error() == PrimError::GraphContainsRepeatingVertexes);
     }
 
     SECTION("Disconnected graph") {
@@ -96,11 +88,6 @@ TEST_CASE("mstPrim throws on invalid input", "[prim]") {
         };
         auto view = MatrixView<int>(raw, 3, 3);
         auto graph = make_graph_from_matrix<int>(view, 0);
-        REQUIRE_THROWS_AS(mstPrim(graph), std::logic_error);
-        try {
-            mstPrim(graph);
-        } catch (const std::logic_error& e) {
-            REQUIRE(std::string(e.what()).find("disconnected") != std::string::npos);
-        }
+        REQUIRE(mstPrim(graph).error() == PrimError::DisconnectedGraph);
     }
 }
