@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(Incident
-    VERSION 0.2.1
+    VERSION 0.2.2
     LANGUAGES CXX)
 
 add_library(incident INTERFACE)
@@ -13,7 +13,7 @@ if(BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_TESTS "Build tests" OFF)
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

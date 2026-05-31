@@ -6,6 +6,8 @@
 
 #include <list>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 
 namespace exx::incident {
 
@@ -32,19 +34,14 @@ private:
     struct _Arc {
         _VertexLabel _from;
         _VertexLabel _to;
-
-        [[no_unique_address]]
-        _ArcData _data;
-
+        [[no_unique_address]] _ArcData _data;
         _EraseAccelerationMetaData _meta{};
 
-        // Конструктор для случая, когда ArcData != void (принимает данные)
         template<typename... Args>
             requires (!std::is_void_v<ArcData>)
         _Arc(_VertexLabel from, _VertexLabel to, Args&&... args)
             : _from(from), _to(to), _data(std::forward<Args>(args)...) {}
 
-        // Конструктор для случая ArcData == void (без данных)
         _Arc(_VertexLabel from, _VertexLabel to)
             requires (std::is_void_v<ArcData>)
             : _from(from), _to(to) {}
@@ -53,7 +50,6 @@ private:
     struct _Vertex {
         std::list<_ArcLabel> _adjacentArcs;
         VertexData _data;
-
         template<typename... Args>
         explicit _Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
     };
@@ -61,73 +57,90 @@ private:
     _VertexList _vertices;
     _ArcList    _arcs;
 
-    template<bool isConst> class _VertexIteratorImpl;
-    template<bool isConst> class _ArcIteratorImpl;
-
+    // ---------- Внутренние дескрипторы (без итераторных операций) ----------
     template<bool isConst>
-    class _ArcProxy {
-    private:
-        using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
-        _ConditionalArcLabel _label;
-
-    public:
-        explicit _ArcProxy(_ConditionalArcLabel label) : _label(label) {}
-
-        using _ConditionalVertexIterator = std::conditional_t<isConst,
-                                                              _VertexIteratorImpl<true>,
-                                                              _VertexIteratorImpl<false>>;
-
-        _ConditionalVertexIterator from() const { return _ConditionalVertexIterator(_label->_from); }
-        _ConditionalVertexIterator to()   const { return _ConditionalVertexIterator(_label->_to); }
-
-        auto& data()
-            requires (!std::is_void_v<ArcData>)
-        { return _label->_data; }
-
-        const auto& data() const
-            requires (!std::is_void_v<ArcData>)
-        { return _label->_data; }
-    };
-
-    template<bool isConst>
-    class _VertexProxy {
+    class _VertexDescriptor {
     private:
         using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _label;
 
-    public:
-        explicit _VertexProxy(_ConditionalVertexLabel label) : _label(label) {}
+        friend class DirectedAbstractGraph;
 
-        using _ConditionalDataRef = std::conditional_t<isConst, const VertexData&, VertexData&>;
-        _ConditionalDataRef data() const { return _label->_data; }
+    public:
+        _VertexDescriptor() = default;
+        _VertexDescriptor(const _VertexDescriptor&) = default;
+        _VertexDescriptor& operator=(const _VertexDescriptor&) = default;
+
+        explicit _VertexDescriptor(_ConditionalVertexLabel label) : _label(label) {}
+
+        // Конвертация из неконстантного в константный
+        _VertexDescriptor(const _VertexDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!isConst) { return _label->_data; }
+        const auto& data() const               { return _label->_data; }
 
         auto adjacentArcs() const {
-            return std::views::transform(_label->_adjacentArcs, [](const _ArcLabel& al) {
-                return _ArcProxy<isConst>(al);
-            });
+            return std::views::transform(_label->_adjacentArcs,
+                                         [](const _ArcLabel& al) { return _ArcDescriptor<isConst>(al); });
         }
     };
 
+    template<bool isConst>
+    class _ArcDescriptor {
+    private:
+        using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
+        _ConditionalArcLabel _label;
+
+        friend class DirectedAbstractGraph;
+
+    public:
+        _ArcDescriptor() = default;
+        _ArcDescriptor(const _ArcDescriptor&) = default;
+        _ArcDescriptor& operator = (const _ArcDescriptor&) = default;
+
+        explicit _ArcDescriptor(_ConditionalArcLabel label) : _label(label) {}
+
+        _ArcDescriptor(const _ArcDescriptor<false>& other) requires isConst
+            : _label(other._label) {}
+
+        auto& data()       requires (!std::is_void_v<ArcData> && !isConst) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<ArcData>) { return _label->_data; }
+
+        _VertexDescriptor<isConst> from() const { return _VertexDescriptor<isConst>(_label->_from); }
+        _VertexDescriptor<isConst> to()   const { return _VertexDescriptor<isConst>(_label->_to); }
+    };
+
+    // ---------- Итераторы (только для обхода) ----------
     template<bool isConst>
     class _VertexIteratorImpl {
     private:
         using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
         _ConditionalVertexLabel _it;
+
         friend class DirectedAbstractGraph;
 
     public:
-        using value_type = _VertexProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _VertexDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _VertexIteratorImpl() = default;
+        _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
+        _VertexIteratorImpl& operator = (const _VertexIteratorImpl&) = default;
+
         explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
 
-        value_type operator*() const { return value_type(_it); }
+        // Конвертация из неконстантного в константный
+        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+            : _it(other._it) {}
+
+        reference operator*() const { return value_type(_it); }
         _VertexIteratorImpl& operator++() { ++_it; return *this; }
-        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _VertexIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _VertexIteratorImpl& other) const { return !(*this == other); }
@@ -138,116 +151,135 @@ private:
     private:
         using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
         _ConditionalArcLabel _it;
+
         friend class DirectedAbstractGraph;
 
     public:
-        using value_type = _ArcProxy<isConst>;
-        using reference  = value_type;
-        using pointer    = void;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
+        using difference_type       = std::ptrdiff_t;
+        using value_type            = _ArcDescriptor<isConst>;
+        using reference             = value_type;
+        using pointer               = void;
+        using iterator_category     = std::forward_iterator_tag;
+        using iterator_concept      = std::forward_iterator_tag;
 
         _ArcIteratorImpl() = default;
+        _ArcIteratorImpl(const _ArcIteratorImpl&) = default;
+        _ArcIteratorImpl& operator = (const _ArcIteratorImpl&) = default;
+
         explicit _ArcIteratorImpl(_ConditionalArcLabel it) : _it(it) {}
 
-        value_type operator*() const { return value_type(_it); }
+        _ArcIteratorImpl(const _ArcIteratorImpl<false>& other) requires isConst
+            : _it(other._it) {}
+
+        reference operator*() const { return value_type(_it); }
         _ArcIteratorImpl& operator++() { ++_it; return *this; }
-        _ArcIteratorImpl operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+        _ArcIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
         bool operator==(const _ArcIteratorImpl& other) const { return _it == other._it; }
         bool operator!=(const _ArcIteratorImpl& other) const { return !(*this == other); }
     };
 
 public:
+    // Публичные типы
+    using VertexDescriptor      = _VertexDescriptor<false>;
+    using ConstVertexDescriptor = _VertexDescriptor<true>;
+    using ArcDescriptor         = _ArcDescriptor<false>;
+    using ConstArcDescriptor    = _ArcDescriptor<true>;
+
     using VertexIterator      = _VertexIteratorImpl<false>;
     using ConstVertexIterator = _VertexIteratorImpl<true>;
     using ArcIterator         = _ArcIteratorImpl<false>;
     using ConstArcIterator    = _ArcIteratorImpl<true>;
-    using VertexProxy         = _VertexProxy<false>;
-    using ConstVertexProxy    = _VertexProxy<true>;
-    using ArcProxy            = _ArcProxy<false>;
-    using ConstArcProxy       = _ArcProxy<true>;
 
+    // ---------- Методы графа ----------
     template<typename... Args>
-    VertexIterator emplaceVertex(Args&&... args) {
+    VertexDescriptor emplaceVertex(Args&&... args) {
         _vertices.emplace_back(std::forward<Args>(args)...);
-        auto it = _vertices.end();
-        --it;
-        return VertexIterator(it);
+        auto it = std::prev(_vertices.end());
+        return VertexDescriptor(it);
     }
 
-    VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(VertexIterator vertexIt) {
-        for (auto arcIt = _arcs.begin(); arcIt != _arcs.end(); ) {
-            if (arcIt->_from == vertexIt._it || arcIt->_to == vertexIt._it) {
-                arcIt->_from->_adjacentArcs.remove(arcIt);
-                arcIt = _arcs.erase(arcIt);
+    void removeVertex(VertexDescriptor vertex) {
+        // Удаляем все дуги, где вершина участвует
+        for (auto it = _arcs.begin(); it != _arcs.end(); ) {
+            if (it->_from == vertex._label || it->_to == vertex._label) {
+                if (it->_from == vertex._label) {
+                    it->_from->_adjacentArcs.erase(it->_meta._posInFrom);
+                }
+                // Для входящих дуг ничего не удаляем из списков, они не хранятся в to
+                it = _arcs.erase(it);
             } else {
-                ++arcIt;
+                ++it;
             }
         }
-        _vertices.erase(vertexIt._it);
+        _vertices.erase(vertex._label);
     }
 
-    // Вариант для ArcData != void
     template<typename... Args>
         requires (!std::is_void_v<ArcData>)
-    ArcIterator emplaceArc(VertexIterator from, VertexIterator to, Args&&... args) {
-        _arcs.emplace_back(from._it, to._it, std::forward<Args>(args)...);
-        auto it = _arcs.end();
-        --it;
-        from._it->_adjacentArcs.push_back(it);
-        it->_meta._posInFrom = std::prev(from._it->_adjacentArcs.end());
-        return ArcIterator(it);
+    ArcDescriptor emplaceArc(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+        _arcs.emplace_back(from._label, to._label, std::forward<Args>(args)...);
+        auto it = std::prev(_arcs.end());
+        from._label->_adjacentArcs.push_back(it);
+        it->_meta._posInFrom = std::prev(from._label->_adjacentArcs.end());
+        return ArcDescriptor(it);
     }
 
-    // addArc с данными (если ArcData не void)
-    ArcIterator addArc(VertexIterator from,
-                       VertexIterator to,
-                       const ArcData& data)
+    ArcDescriptor addArc(VertexDescriptor from, VertexDescriptor to, const ArcData& data)
         requires (!std::is_void_v<ArcData>)
     { return emplaceArc(from, to, data); }
 
-    // addArc без данных (только для ArcData == void)
-    ArcIterator addArc(VertexIterator from, VertexIterator to)
+    ArcDescriptor addArc(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<ArcData>)
     {
-        _arcs.emplace_back(from._it, to._it);
-        auto it = _arcs.end();
-        --it;
-        from._it->_adjacentArcs.push_back(it);
-        it->_meta._posInFrom = std::prev(from._it->_adjacentArcs.end());
-        return ArcIterator(it);
+        _arcs.emplace_back(from._label, to._label);
+        auto it = std::prev(_arcs.end());
+        from._label->_adjacentArcs.push_back(it);
+        it->_meta._posInFrom = std::prev(from._label->_adjacentArcs.end());
+        return ArcDescriptor(it);
     }
 
-    void removeArc(ArcIterator arcIt) {
-        auto& arc = *arcIt._it;
-        arc._from->_adjacentArcs.erase(arc._meta._posInFrom);
-        _arcs.erase(arcIt._it);
+    void removeArc(ArcDescriptor arc) {
+        arc._label->_from->_adjacentArcs.erase(arc._label->_meta._posInFrom);
+        _arcs.erase(arc._label);
     }
 
-    VertexIterator      beginVertices()        { return VertexIterator(_vertices.begin()); }
-    VertexIterator      endVertices()          { return VertexIterator(_vertices.end()); }
-    ConstVertexIterator beginVertices()  const { return ConstVertexIterator(_vertices.begin()); }
-    ConstVertexIterator endVertices()    const { return ConstVertexIterator(_vertices.end()); }
+    // Итераторы для обхода
+    VertexIterator beginVertices() { return VertexIterator(_vertices.begin()); }
+    VertexIterator endVertices()   { return VertexIterator(_vertices.end()); }
+    ConstVertexIterator beginVertices() const { return ConstVertexIterator(_vertices.begin()); }
+    ConstVertexIterator endVertices()   const { return ConstVertexIterator(_vertices.end()); }
     ConstVertexIterator cbeginVertices() const { return ConstVertexIterator(_vertices.begin()); }
     ConstVertexIterator cendVertices()   const { return ConstVertexIterator(_vertices.end()); }
 
-    auto vertices()            { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto vertices()      const { return std::ranges::subrange(beginVertices(), endVertices()); }
-    auto constVertices() const { return std::ranges::subrange(cbeginVertices(), cendVertices()); }
+    auto vertices() {
+        return std::ranges::subrange<VertexIterator, VertexIterator>(beginVertices(), endVertices());
+    }
+    auto vertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(beginVertices(), endVertices());
+    }
+    auto constVertices() const {
+        return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(cbeginVertices(), cendVertices());
+    }
 
-    ArcIterator      beginArcs()        { return ArcIterator(_arcs.begin()); }
-    ArcIterator      endArcs()          { return ArcIterator(_arcs.end()); }
-    ConstArcIterator beginArcs()  const { return ConstArcIterator(_arcs.begin()); }
-    ConstArcIterator endArcs()    const { return ConstArcIterator(_arcs.end()); }
+    ArcIterator beginArcs() { return ArcIterator(_arcs.begin()); }
+    ArcIterator endArcs()   { return ArcIterator(_arcs.end()); }
+    ConstArcIterator beginArcs() const { return ConstArcIterator(_arcs.begin()); }
+    ConstArcIterator endArcs()   const { return ConstArcIterator(_arcs.end()); }
     ConstArcIterator cbeginArcs() const { return ConstArcIterator(_arcs.begin()); }
     ConstArcIterator cendArcs()   const { return ConstArcIterator(_arcs.end()); }
 
-    auto arcs()            { return std::ranges::subrange(beginArcs(), endArcs()); }
-    auto arcs()      const { return std::ranges::subrange(beginArcs(), endArcs()); }
-    auto constArcs() const { return std::ranges::subrange(cbeginArcs(), cendArcs()); }
+    auto arcs() {
+        return std::ranges::subrange<ArcIterator, ArcIterator>(beginArcs(), endArcs());
+    }
+    auto arcs() const {
+        return std::ranges::subrange<ConstArcIterator, ConstArcIterator>(beginArcs(), endArcs());
+    }
+    auto constArcs() const {
+        return std::ranges::subrange<ConstArcIterator, ConstArcIterator>(cbeginArcs(), cendArcs());
+    }
 
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t arcCount() const { return _arcs.size(); }
@@ -471,7 +503,7 @@ public:
 
     VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(VertexIterator vertexIt) {
+    void removeVertex(ConstVertexIterator vertexIt) {
         auto incidentCopy = vertexIt._it->_incidentEdges;
         for (auto edgeIt : incidentCopy) {
             removeEdge(EdgeIterator(edgeIt));
@@ -941,7 +973,7 @@ public:
 
     VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(VertexIterator vertexIt) {
+    void removeVertex(ConstVertexIterator vertexIt) {
         auto incidentCopy = vertexIt._it->_incidentEdges;
         for (auto edgeIt : incidentCopy) {
             removeEdge(EdgeIterator(edgeIt));
@@ -1201,6 +1233,25 @@ make_graph_from_matrix(std::initializer_list<std::initializer_list<EdgeData>> li
 
 template<typename VertexData, typename EdgeData>
 UndirectedAbstractGraph<VertexData, EdgeData>
+make_graph_from_matrix(std::vector<std::vector<EdgeData>> mat, EdgeData noEdgeValue = EdgeData{}) {
+    if (mat.empty()) {
+        MatrixView<EdgeData> emptyView(nullptr, 0, 0);
+        return impl::make_graph_from_matrix<VertexData, EdgeData>(emptyView, noEdgeValue);
+    }
+    std::size_t rows = mat.size();
+    std::size_t cols = mat[0].size();
+    for (const auto& row : mat) {
+        if (row.size() != cols)
+            throw std::invalid_argument("Non-rectangular matrix");
+    }
+    auto range = mat | std::views::join;
+    std::vector<EdgeData> flat(range.begin(), range.end());
+    MatrixView<EdgeData> view(flat.data(), rows, cols);
+    return impl::make_graph_from_matrix<VertexData, EdgeData>(view, noEdgeValue);
+}
+
+template<typename VertexData, typename EdgeData>
+UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(const MatrixView<EdgeData>& mat, EdgeData noEdgeValue = EdgeData{}) {
     return impl::make_graph_from_matrix<VertexData, EdgeData>(mat, noEdgeValue);
 }
@@ -1439,7 +1490,7 @@ public:
 
     VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(VertexIterator vertexIt) {
+    void removeVertex(ConstVertexIterator vertexIt) {
         auto incidentCopy = vertexIt._it->_incidentEdges;
         for (auto edgeIt : incidentCopy) {
             removeEdge(EdgeIterator(edgeIt));

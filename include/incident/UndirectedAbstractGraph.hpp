@@ -212,7 +212,7 @@ public:
 
     VertexIterator addVertex(const VertexData& data) { return emplaceVertex(data); }
 
-    void removeVertex(VertexIterator vertexIt) {
+    void removeVertex(ConstVertexIterator vertexIt) {
         auto incidentCopy = vertexIt._it->_incidentEdges;
         for (auto edgeIt : incidentCopy) {
             removeEdge(EdgeIterator(edgeIt));

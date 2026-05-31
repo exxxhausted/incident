@@ -51,6 +51,26 @@ make_graph_from_matrix(std::initializer_list<std::initializer_list<EdgeData>> li
 
 template<typename VertexData, typename EdgeData>
 UndirectedAbstractGraph<VertexData, EdgeData>
+make_graph_from_matrix(std::vector<std::vector<EdgeData>> mat, EdgeData noEdgeValue = EdgeData{}) {
+    if (mat.empty()) {
+        MatrixView<EdgeData> emptyView(nullptr, 0, 0);
+        return impl::make_graph_from_matrix<VertexData, EdgeData>(emptyView, noEdgeValue);
+    }
+    std::size_t rows = mat.size();
+    std::size_t cols = mat[0].size();
+    for (const auto& row : mat) {
+        if (row.size() != cols)
+            throw std::invalid_argument("Non-rectangular matrix");
+    }
+    auto range = mat | std::views::join;
+    std::vector<EdgeData> flat(range.begin(), range.end());
+    MatrixView<EdgeData> view(flat.data(), rows, cols);
+    return impl::make_graph_from_matrix<VertexData, EdgeData>(view, noEdgeValue);
+}
+
+
+template<typename VertexData, typename EdgeData>
+UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(const MatrixView<EdgeData>& mat, EdgeData noEdgeValue = EdgeData{}) {
     return impl::make_graph_from_matrix<VertexData, EdgeData>(mat, noEdgeValue);
 }
