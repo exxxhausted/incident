@@ -140,6 +140,12 @@ private:
         using difference_type = std::ptrdiff_t;
 
         _VertexIteratorImpl() = default;
+        _VertexIteratorImpl(const _VertexIteratorImpl&) = default;
+        _VertexIteratorImpl& operator=(const _VertexIteratorImpl&) = default;
+
+        _VertexIteratorImpl(const _VertexIteratorImpl<false>& other) requires isConst
+           : _it(other._it) {}
+
         explicit _VertexIteratorImpl(_ConditionalVertexLabel it) : _it(it) {}
 
         value_type operator*() const { return value_type(_it); }
@@ -169,6 +175,12 @@ private:
         using difference_type = std::ptrdiff_t;
 
         _EdgeIteratorImpl() = default;
+        _EdgeIteratorImpl(const _EdgeIteratorImpl&) = default;
+        _EdgeIteratorImpl& operator=(const _EdgeIteratorImpl&) = default;
+
+        _EdgeIteratorImpl(const _EdgeIteratorImpl<false>& other) requires isConst
+            : _it(other._it) {}
+
         explicit _EdgeIteratorImpl(_ConditionalEdgeLabel it) : _it(it) {}
 
         value_type operator*() const { return value_type(_it); }

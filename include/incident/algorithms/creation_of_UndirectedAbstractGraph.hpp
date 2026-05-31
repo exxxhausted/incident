@@ -9,7 +9,6 @@
 
 namespace exx::incident {
 
-
 namespace impl {
 
 template<typename VertexData, typename EdgeData>

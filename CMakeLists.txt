@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(Incident
-    VERSION 0.2
+    VERSION 0.2.1
     LANGUAGES CXX)
 
 add_library(incident INTERFACE)
@@ -19,7 +19,7 @@ if(BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-option(BUILD_SINGLE_HEADER "Generate single-header version" OFF)
+option(BUILD_SINGLE_HEADER "Generate single-header version" ON)
 if(BUILD_SINGLE_HEADER)
     set(INCIDENT_MAIN_HEADER "${CMAKE_SOURCE_DIR}/include/incident/incident.hpp")
     set(SINGLE_HEADER_OUTPUT "${CMAKE_SOURCE_DIR}/single_include/incident.hpp")

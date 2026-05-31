@@ -2,5 +2,6 @@
 #define EXX_ALGORITHMS_HPP
 
 #include "creation_of_UndirectedAbstractGraph.hpp"
+#include "mstPrim.hpp"
 
 #endif // EXX_ALGORITHMS_HPP
