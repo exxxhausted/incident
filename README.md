@@ -15,6 +15,7 @@ This principle became the basis of current API.
 
 The API is based on idea of access through proxy-objects that protects the internal information about topology.
 "Incident" provides a guarantee that you won't break the topology by dereferencing an iterator.  
+
 Unfortunately there is no overload of `operator ->`.
 
 ## 3. Integration with std::ranges
@@ -24,9 +25,11 @@ Examples:
 
 `for (auto v : graph.vertices()) { ... }`  
 `for (auto e : v.incidentEdges()) { ... }`  
-`for (auto a : vertex.adjacentArcs()) { ... }`  
+`for (auto a : vertex.adjacentArcs()) { ... }` 
 
-## Header-only and single‑header edition 
+It is neсessary to use `auto` without any modifyers. For const-access you should call const-range-returning method.
+
+## 4. Header-only and single‑header edition 
 There is no way to precompile difficult template code, so header-only distribution is only possible.  
 You always can include all content of "Incident" immediately by using `single_header/incident.hpp` in your `third_party`
 
