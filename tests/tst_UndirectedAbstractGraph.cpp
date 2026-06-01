@@ -59,8 +59,8 @@ TEST_CASE("UndirectedAbstractGraph works correctly", "[undirected]") {
         auto v2 = g.addVertex(2);
         auto e = g.addEdge(v1, v2, 99);
 
-        REQUIRE(e.otherEnd(v1).data() == 2);
-        REQUIRE(e.otherEnd(v2).data() == 1);
+        REQUIRE(e.otherEnd(v1)->data() == 2);
+        REQUIRE(e.otherEnd(v2)->data() == 1);
     }
 
     SECTION("Remove edge") {
@@ -96,7 +96,7 @@ TEST_CASE("UndirectedAbstractGraph works correctly", "[undirected]") {
         // Проверяем, что у оставшихся вершин правильные рёбра
         auto incidentV1 = v1.incidentEdges();
         REQUIRE(std::distance(incidentV1.begin(), incidentV1.end()) == 1);
-        REQUIRE((*incidentV1.begin()).otherEnd(v1).data() == 3);
+        REQUIRE((*incidentV1.begin()).otherEnd(v1)->data() == 3);
     }
 
     SECTION("Multiple edges are allowed") {

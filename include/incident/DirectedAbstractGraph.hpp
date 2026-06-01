@@ -80,6 +80,9 @@ private:
             return std::views::transform(_label->_adjacentArcs,
                                          [](const _ArcLabel& al) { return _ArcDescriptor<isConst>(al); });
         }
+
+        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -105,6 +108,9 @@ private:
 
         _VertexDescriptor<isConst> from() const { return _VertexDescriptor<isConst>(_label->_from); }
         _VertexDescriptor<isConst> to()   const { return _VertexDescriptor<isConst>(_label->_to); }
+
+        bool operator==(const _ArcDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _ArcDescriptor& other) const { return !(*this == other); }
     };
 
     // ---------- Итераторы (только для обхода) ----------

@@ -2,115 +2,89 @@
 #define EXX_MSTPRIM_HPP
 
 #include <queue>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <stdexcept>
 #include <expected>
+#include <string>
 
-#include "../UndirectedAbstractGraph.hpp"
+#include "../UndirectedGraph.hpp"
 
 namespace exx::incident {
 
 enum class PrimError {
-    GraphContainsRepeatingVertexes,
     DisconnectedGraph
 };
 
-std::string to_string(PrimError e) {
+inline std::string to_string(PrimError e) {
     switch (e) {
     case PrimError::DisconnectedGraph:
         return "Граф не является связным";
-    case PrimError::GraphContainsRepeatingVertexes:
-        return "Граф содержит повторяющиеся вершины";
     }
     return "Неизвестная ошибка";
 }
 
 template<typename VertexData,
          typename EdgeData,
-         typename VHash = std::hash<VertexData>,
-         typename VEqual = std::equal_to<VertexData>>
-std::expected<UndirectedAbstractGraph<VertexData, EdgeData>, PrimError>
-mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
-        VHash vHash = VHash{},
-        VEqual vEqual = VEqual{})
+         typename VHash,
+         typename EHash>
+requires (!std::is_void_v<EdgeData> &&
+          !std::is_void_v<VHash> &&
+          std::is_copy_constructible_v<EdgeData>)
+auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash, EHash>& graph)
+    -> std::expected<UndirectedGraph<VertexData, EdgeData, VHash, EHash>, PrimError>
 {
-    using _Graph = UndirectedAbstractGraph<VertexData, EdgeData>;
+    using GraphType = UndirectedGraph<VertexData, EdgeData, VHash, EHash>;
+    using VertexDesc = typename GraphType::VertexDescriptor;
+    using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
+    if (graph.vertexCount() == 0) return GraphType{};
 
-    using _СHashMap = std::unordered_map<VertexData,
-                                       typename _Graph::ConstVertexDescriptor,
-                                       VHash,
-                                       VEqual>;
+    GraphType mst;
+    for (auto v : graph.constVertices()) mst.addVertex(v.data());
 
-    using _HashMap = std::unordered_map<VertexData,
-                                        typename _Graph::VertexDescriptor,
-                                        VHash,
-                                        VEqual>;
-
-    {
-        std::unordered_set<VertexData, VHash, VEqual> uniqueChecker(0, vHash, vEqual);
-        for (auto v : graph.vertices()) {
-            const VertexData& data = v.data();
-            if (!uniqueChecker.insert(data).second)
-                return std::unexpected(PrimError::GraphContainsRepeatingVertexes);
-        }
-    }
-
-    if (graph.vertexCount() == 0) return _Graph{};
-
-    _СHashMap originalVerticesDescriptorsCollection(0, vHash, vEqual);
-
-    for (auto vD : graph.constVertices()) originalVerticesDescriptorsCollection.insert( { vD.data(), vD } );
-
-    _Graph mst;
-    _HashMap mstVerticesDescriptorsCollection(0, vHash, vEqual);
-
-    for (const auto& [vData, _] : originalVerticesDescriptorsCollection) {
-        VertexData id = vData;
-        mstVerticesDescriptorsCollection[id] = mst.addVertex(id);
-    }
-
-    if (graph.edgeCount() == 0) return mst;
-
-    struct _QueueEl {
-        EdgeData _eData;
-        VertexData _1;
-        VertexData _2;
+    struct QueueElement {
+        EdgeData weight;
+        VertexData vertexData;
+        VertexData parentData;
     };
+    auto cmp = [](const QueueElement& a, const QueueElement& b) {
+        return a.weight > b.weight;
+    };
+    std::priority_queue<QueueElement, std::vector<QueueElement>, decltype(cmp)> pq(cmp);
 
-    auto cmp = [](const _QueueEl& a, const _QueueEl& b) { return a._eData > b._eData; };
-
-    std::priority_queue<_QueueEl, std::vector<_QueueEl>, decltype(cmp)> pq(cmp);
-
-    std::unordered_set<VertexData, VHash, VEqual> visited(0, vHash, vEqual);
-    VertexData startData = originalVerticesDescriptorsCollection.begin()->first;
+    std::unordered_set<VertexData, VHash> visited(0, VHash{});
+    VertexData startData = (*graph.constVertices().begin()).data();
     visited.insert(startData);
 
-    auto startDescr = originalVerticesDescriptorsCollection[startData];
-    for (auto edge : startDescr.incidentEdges()) {
-        auto other = edge.otherEnd(startDescr);
-        VertexData otherData = other.data();
-        EdgeData w = edge.data();
-        pq.push( { w, otherData, startData } );
+    ConstVertexDesc startDesc = (*graph.beginVertices());
+
+    for (auto edge : startDesc.incidentEdges()) {
+        auto otherDesc = edge.otherEnd(startDesc);
+        VertexData otherData = otherDesc->data();
+        if (!visited.contains(otherData))
+            pq.push({edge.data(), otherData, startData});
     }
 
     while (!pq.empty()) {
-        auto [w, vData, parentData] = pq.top();
+        auto [weight, vData, parentData] = pq.top();
         pq.pop();
+
         if (visited.contains(vData)) continue;
-
         visited.insert(vData);
-        mst.addEdge(mstVerticesDescriptorsCollection[parentData],
-                    mstVerticesDescriptorsCollection[vData],
-                    w);
 
-        auto vDescr = originalVerticesDescriptorsCollection[vData];
-        for (auto edge : vDescr.incidentEdges()) {
-            auto other = edge.otherEnd(vDescr);
-            VertexData otherData = other.data();
+        auto parentDescOpt = mst.findVertex(parentData);
+        auto vDescOpt = mst.findVertex(vData);
+        if (!parentDescOpt || !vDescOpt) throw ("bebe");
+        mst.addEdge(*parentDescOpt, *vDescOpt, weight);
+
+        auto vDescOrigOpt = graph.findVertex(vData);
+        if (!vDescOrigOpt) throw ("bubu");
+        VertexDesc vDesc = *vDescOrigOpt;
+
+        for (auto edge : vDesc.incidentEdges()) {
+            auto otherDesc = edge.otherEnd(vDesc);
+            VertexData otherData = otherDesc->data();
             if (!visited.contains(otherData))
-                pq.push( { edge.data(), otherData, vData } );
+                pq.push({edge.data(), otherData, vData});
         }
     }
 

@@ -83,6 +83,9 @@ private:
             return std::views::transform(_label->_adjacentArcs,
                                          [](const _ArcLabel& al) { return _ArcDescriptor<isConst>(al); });
         }
+
+        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -108,6 +111,9 @@ private:
 
         _VertexDescriptor<isConst> from() const { return _VertexDescriptor<isConst>(_label->_from); }
         _VertexDescriptor<isConst> to()   const { return _VertexDescriptor<isConst>(_label->_to); }
+
+        bool operator==(const _ArcDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _ArcDescriptor& other) const { return !(*this == other); }
     };
 
     // ---------- Итераторы (только для обхода) ----------
@@ -290,8 +296,9 @@ public:
 
 #include <list>
 #include <ranges>
-#include <stdexcept>
 #include <type_traits>
+#include <optional>
+#include <unordered_map>
 
 namespace exx::incident {
 
@@ -369,6 +376,9 @@ private:
             return std::views::transform(_label->_incidentEdges,
                                          [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
+
+        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -395,14 +405,17 @@ private:
         _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
         _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
 
-        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+        std::optional<_VertexDescriptor<isConst>> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
             if (vertex._label == _label->_v1)
                 return _VertexDescriptor<isConst>(_label->_v2);
             else if (vertex._label == _label->_v2)
                 return _VertexDescriptor<isConst>(_label->_v1);
             else
-                throw std::invalid_argument("Vertex is not incident to this edge");
+                return std::nullopt;
         }
+
+        bool operator==(const _EdgeDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _EdgeDescriptor& other) const { return !(*this == other); }
     };
 
     // ---------- Iterators ----------
@@ -484,6 +497,41 @@ public:
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
+    UndirectedAbstractGraph() = default;
+
+    // Конструктор копирования (глубокое копирование)
+    UndirectedAbstractGraph(const UndirectedAbstractGraph& other) {
+        std::unordered_map<const _Vertex*, VertexDescriptor> origToNew;
+
+        for (const auto& origVertex : other._vertices) {
+            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            origToNew[&origVertex] = newV;
+        }
+
+        for (const auto& origEdge : other._edges) {
+            VertexDescriptor newV1 = origToNew[&(*origEdge._v1)];
+            VertexDescriptor newV2 = origToNew[&(*origEdge._v2)];
+
+            if constexpr (std::is_void_v<EdgeData>) addEdge(newV1, newV2);
+            else addEdge(newV1, newV2, origEdge._data);
+        }
+    }
+
+    // Конструктор перемещения
+    UndirectedAbstractGraph(UndirectedAbstractGraph&&) noexcept = default;
+
+    // Копирующее присваивание (через copy-and-swap)
+    UndirectedAbstractGraph& operator=(const UndirectedAbstractGraph& other) {
+        if (this != &other) {
+            UndirectedAbstractGraph temp(other);
+            *this = std::move(temp);
+        }
+        return *this;
+    }
+
+    // Перемещающее присваивание
+    UndirectedAbstractGraph& operator=(UndirectedAbstractGraph&&) noexcept = default;
+
     // ---------- Vertex operations ----------
     template<typename... Args>
     VertexDescriptor emplaceVertex(Args&&... args) {
@@ -493,6 +541,7 @@ public:
     }
 
     VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
 
     void removeVertex(VertexDescriptor vertex) {
         // Make a copy because the incident edge list will be modified during iteration
@@ -516,10 +565,13 @@ public:
         return EdgeDescriptor(it);
     }
 
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
+    // Шаблонная версия addEdge
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
-    { return emplaceEdge(from, to, data); }
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, T&& data)
+    { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    // Специализация для void EdgeData
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
@@ -577,6 +629,13 @@ public:
     // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+        for(auto e : from.incidentEdges()) if(*e.otherEnd(from) == to) return e;
+        return std::nullopt;
+    }
+
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -770,8 +829,9 @@ concept MatrixProvadingDataView = requires(M m, std::size_t i, std::size_t j) {
 
 #include <list>
 #include <ranges>
-#include <stdexcept>
 #include <type_traits>
+#include <optional>
+#include <unordered_map>
 
 namespace exx::incident {
 
@@ -849,6 +909,9 @@ private:
             return std::views::transform(_label->_incidentEdges,
                                          [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
+
+        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -875,14 +938,17 @@ private:
         _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
         _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
 
-        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+        std::optional<_VertexDescriptor<isConst>> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
             if (vertex._label == _label->_v1)
                 return _VertexDescriptor<isConst>(_label->_v2);
             else if (vertex._label == _label->_v2)
                 return _VertexDescriptor<isConst>(_label->_v1);
             else
-                throw std::invalid_argument("Vertex is not incident to this edge");
+                return std::nullopt;
         }
+
+        bool operator==(const _EdgeDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _EdgeDescriptor& other) const { return !(*this == other); }
     };
 
     // ---------- Iterators ----------
@@ -964,6 +1030,41 @@ public:
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
+    UndirectedAbstractGraph() = default;
+
+    // Конструктор копирования (глубокое копирование)
+    UndirectedAbstractGraph(const UndirectedAbstractGraph& other) {
+        std::unordered_map<const _Vertex*, VertexDescriptor> origToNew;
+
+        for (const auto& origVertex : other._vertices) {
+            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            origToNew[&origVertex] = newV;
+        }
+
+        for (const auto& origEdge : other._edges) {
+            VertexDescriptor newV1 = origToNew[&(*origEdge._v1)];
+            VertexDescriptor newV2 = origToNew[&(*origEdge._v2)];
+
+            if constexpr (std::is_void_v<EdgeData>) addEdge(newV1, newV2);
+            else addEdge(newV1, newV2, origEdge._data);
+        }
+    }
+
+    // Конструктор перемещения
+    UndirectedAbstractGraph(UndirectedAbstractGraph&&) noexcept = default;
+
+    // Копирующее присваивание (через copy-and-swap)
+    UndirectedAbstractGraph& operator=(const UndirectedAbstractGraph& other) {
+        if (this != &other) {
+            UndirectedAbstractGraph temp(other);
+            *this = std::move(temp);
+        }
+        return *this;
+    }
+
+    // Перемещающее присваивание
+    UndirectedAbstractGraph& operator=(UndirectedAbstractGraph&&) noexcept = default;
+
     // ---------- Vertex operations ----------
     template<typename... Args>
     VertexDescriptor emplaceVertex(Args&&... args) {
@@ -973,6 +1074,7 @@ public:
     }
 
     VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
 
     void removeVertex(VertexDescriptor vertex) {
         // Make a copy because the incident edge list will be modified during iteration
@@ -996,10 +1098,13 @@ public:
         return EdgeDescriptor(it);
     }
 
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
+    // Шаблонная версия addEdge
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
-    { return emplaceEdge(from, to, data); }
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, T&& data)
+    { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    // Специализация для void EdgeData
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
@@ -1057,6 +1162,13 @@ public:
     // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+        for(auto e : from.incidentEdges()) if(*e.otherEnd(from) == to) return e;
+        return std::nullopt;
+    }
+
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -1274,19 +1386,34 @@ make_graph_from_matrix(M&& mat, EdgeData noEdgeValue = EdgeData{}) {
 #define EXX_MSTPRIM_HPP
 
 #include <queue>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <stdexcept>
 #include <expected>
+#include <string>
+
+#ifndef EXX_UNDIRECTEDGRAPH_HPP
+#define EXX_UNDIRECTEDGRAPH_HPP
+
+#include <optional>
+#ifndef EXX_UNDIRECTEDMULTIGRAPH_HPP
+#define EXX_UNDIRECTEDMULTIGRAPH_HPP
+
+#include <optional>
+#ifndef EXX_UNDIRECTEDPSEUDOGRAPH_HPP
+#define EXX_UNDIRECTEDPSEUDOGRAPH_HPP
+
+#include <unordered_map>
+#include <optional>
+#include <algorithm>
 
 #ifndef EXX_UNDIRECTEDABSTRACTGRAPH_HPP
 #define EXX_UNDIRECTEDABSTRACTGRAPH_HPP
 
 #include <list>
 #include <ranges>
-#include <stdexcept>
 #include <type_traits>
+#include <optional>
+#include <unordered_map>
 
 namespace exx::incident {
 
@@ -1364,6 +1491,9 @@ private:
             return std::views::transform(_label->_incidentEdges,
                                          [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
+
+        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -1390,14 +1520,17 @@ private:
         _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
         _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
 
-        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+        std::optional<_VertexDescriptor<isConst>> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
             if (vertex._label == _label->_v1)
                 return _VertexDescriptor<isConst>(_label->_v2);
             else if (vertex._label == _label->_v2)
                 return _VertexDescriptor<isConst>(_label->_v1);
             else
-                throw std::invalid_argument("Vertex is not incident to this edge");
+                return std::nullopt;
         }
+
+        bool operator==(const _EdgeDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _EdgeDescriptor& other) const { return !(*this == other); }
     };
 
     // ---------- Iterators ----------
@@ -1479,6 +1612,41 @@ public:
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
+    UndirectedAbstractGraph() = default;
+
+    // Конструктор копирования (глубокое копирование)
+    UndirectedAbstractGraph(const UndirectedAbstractGraph& other) {
+        std::unordered_map<const _Vertex*, VertexDescriptor> origToNew;
+
+        for (const auto& origVertex : other._vertices) {
+            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            origToNew[&origVertex] = newV;
+        }
+
+        for (const auto& origEdge : other._edges) {
+            VertexDescriptor newV1 = origToNew[&(*origEdge._v1)];
+            VertexDescriptor newV2 = origToNew[&(*origEdge._v2)];
+
+            if constexpr (std::is_void_v<EdgeData>) addEdge(newV1, newV2);
+            else addEdge(newV1, newV2, origEdge._data);
+        }
+    }
+
+    // Конструктор перемещения
+    UndirectedAbstractGraph(UndirectedAbstractGraph&&) noexcept = default;
+
+    // Копирующее присваивание (через copy-and-swap)
+    UndirectedAbstractGraph& operator=(const UndirectedAbstractGraph& other) {
+        if (this != &other) {
+            UndirectedAbstractGraph temp(other);
+            *this = std::move(temp);
+        }
+        return *this;
+    }
+
+    // Перемещающее присваивание
+    UndirectedAbstractGraph& operator=(UndirectedAbstractGraph&&) noexcept = default;
+
     // ---------- Vertex operations ----------
     template<typename... Args>
     VertexDescriptor emplaceVertex(Args&&... args) {
@@ -1488,6 +1656,7 @@ public:
     }
 
     VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
 
     void removeVertex(VertexDescriptor vertex) {
         // Make a copy because the incident edge list will be modified during iteration
@@ -1511,10 +1680,13 @@ public:
         return EdgeDescriptor(it);
     }
 
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
+    // Шаблонная версия addEdge
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
-    { return emplaceEdge(from, to, data); }
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, T&& data)
+    { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    // Специализация для void EdgeData
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
@@ -1572,6 +1744,13 @@ public:
     // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+        for(auto e : from.incidentEdges()) if(*e.otherEnd(from) == to) return e;
+        return std::nullopt;
+    }
+
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -1580,105 +1759,622 @@ public:
 
 namespace exx::incident {
 
+template<typename VertexData,
+         typename EdgeData,
+         typename VertexHash = std::hash<VertexData>,
+         typename EdgeHash = std::hash<EdgeData>>
+class UndirectedPseudoGraph {
+public:
+    // --- Юзинги ---
+    using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
+    using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
+    using EdgeDescriptor        = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptor;
+    using ConstEdgeDescriptor   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstEdgeDescriptor;
+
+    using VertexIterator        = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexIterator;
+    using ConstVertexIterator   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexIterator;
+    using EdgeIterator          = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeIterator;
+    using ConstEdgeIterator     = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstEdgeIterator;
+
+    // --- Конструкторы ---
+    UndirectedPseudoGraph() = default;
+
+    explicit UndirectedPseudoGraph(const UndirectedAbstractGraph<VertexData, EdgeData>& graph)
+        : _graph(graph)
+    { _rebuildIndexes(); }
+
+    // Копирование (глубокое)
+    UndirectedPseudoGraph(const UndirectedPseudoGraph& other)
+        : _graph(other._graph)
+    { _rebuildIndexes(); }
+
+    // Перемещение (простое)
+    UndirectedPseudoGraph(UndirectedPseudoGraph&& other) noexcept
+        : _graph(std::move(other._graph)),
+        _vht(std::move(other._vht)),
+        _eht(std::move(other._eht)) {}
+
+    // Копирующее присваивание (через copy-and-swap)
+    UndirectedPseudoGraph& operator=(const UndirectedPseudoGraph& other) {
+        if (this != &other) {
+            UndirectedPseudoGraph tmp(other);
+            swap(tmp);
+        }
+        return *this;
+    }
+
+    // Перемещающее присваивание
+    UndirectedPseudoGraph& operator=(UndirectedPseudoGraph&& other) noexcept {
+        if (this != &other) {
+            _graph = std::move(other._graph);
+            _vht   = std::move(other._vht);
+            _eht   = std::move(other._eht);
+        }
+        return *this;
+    }
+
+    // Обмен
+    void swap(UndirectedPseudoGraph& other) noexcept {
+        using std::swap;
+        swap(_graph, other._graph);
+        swap(_vht,   other._vht);
+        swap(_eht,   other._eht);
+    }
+
+    // --- Вершины (уникальность) ---
+    template<typename... Args>
+    std::optional<VertexDescriptor> emplaceVertex(Args&&... args) {
+        VertexData data(std::forward<Args>(args)...);
+        if constexpr (!std::is_void_v<VertexHash>) {
+            if (_vht.contains(data)) return std::nullopt;
+            VertexDescriptor v = _graph.addVertex(std::move(data));
+            _vht.emplace(v.data(), v);
+            return v;
+        } else {
+            for(auto vert : _graph.vertices())
+                if(vert.data() == data) return std::nullopt;
+            return _graph.emplaceVertex(std::move(data));
+        }
+    }
+
+    std::optional<VertexDescriptor> addVertex(const VertexData& data)
+    { return emplaceVertex(data); }
+    std::optional<VertexDescriptor> addVertex(VertexData&& data)
+    { return emplaceVertex(std::move(data)); }
+
+    void removeVertex(VertexDescriptor v) {
+        if constexpr (!std::is_void_v<VertexHash>)
+            _vht.erase(v.data());
+
+        _graph.removeVertex(v);
+    }
+
+    std::optional<VertexDescriptor> findVertex(const VertexData& data) const {
+        if constexpr (std::is_void_v<VertexHash>) {
+            for(auto vert : _graph.vertices())
+                if(vert.data() == data) return vert;
+            return std::nullopt;
+        }else {
+            auto it = _vht.find(data);
+            if (it != _vht.end())
+                return it->second;
+            return std::nullopt;
+        }
+    }
+
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData>)
+    auto findEdge(const T& data) const
+        requires (!std::is_void_v<EdgeData>)
+    {
+        if constexpr (!std::is_void_v<EdgeHash>) {
+            auto [first, last] = _eht.equal_range(data);
+            return std::ranges::subrange(first, last)
+                   | std::views::transform([](const auto& pair) { return pair.second; });
+        } else {
+            return _graph.edges()
+                   | std::views::filter([data](const auto& edge) { return edge.data() == data; });
+        }
+    }
+
+    bool containsVertex(const VertexData& data) const
+        requires (!std::is_void_v<VertexHash>)
+    { return _vht.contains(data); }
+
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeHash> && !std::is_void_v<EdgeData>)
+    bool containsEdge(const T& data) const
+    { return _eht.contains(data); }
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData> && std::is_void_v<EdgeHash>)
+    bool containsEdge(const T& data) const {
+        for (auto edge : _graph.edges())
+            if (edge.data() == data) return true;
+        return false;
+    }
+
+    // --- Рёбра ---
+    template<typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args)
+    {
+        auto d = _graph.addEdge(from, to, std::forward<Args>(args)...);
+        if constexpr (!std::is_void_v<EdgeHash>) _eht.emplace(d.data(), d);
+        return d;
+    }
+
+    template<typename T = EdgeData, typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, T&& data)
+    { return emplaceEdge(from, to, std::forward<T>(data)); }
+
+    template<typename... Args>
+        requires (std::is_void_v<EdgeData>)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
+    { return _graph.addEdge(from, to); }
+
+    void removeEdge(EdgeDescriptor e) {
+        if constexpr(!std::is_void_v<EdgeHash> && !std::is_void_v<EdgeData>) {
+            auto [first, last] = _eht.equal_range(e.data());
+            auto it = std::find_if(first, last, [&](const auto& pair) { return pair.second == e; });
+            if (it != last) _eht.erase(it);
+        }
+
+        _graph.removeEdge(e);
+    }
+
+    // --- Итераторы вершин ---
+    VertexIterator beginVertices()       { return _graph.beginVertices(); }
+    VertexIterator endVertices()         { return _graph.endVertices(); }
+    ConstVertexIterator beginVertices() const { return _graph.beginVertices(); }
+    ConstVertexIterator endVertices()   const { return _graph.endVertices(); }
+    ConstVertexIterator cbeginVertices() const { return _graph.cbeginVertices(); }
+    ConstVertexIterator cendVertices()   const { return _graph.cendVertices(); }
+
+    auto vertices()       { return _graph.vertices(); }
+    auto vertices() const { return _graph.vertices(); }
+    auto constVertices() const { return _graph.constVertices(); }
+
+    // --- Итераторы рёбер ---
+    EdgeIterator beginEdges()       { return _graph.beginEdges(); }
+    EdgeIterator endEdges()         { return _graph.endEdges(); }
+    ConstEdgeIterator beginEdges() const { return _graph.beginEdges(); }
+    ConstEdgeIterator endEdges()   const { return _graph.endEdges(); }
+    ConstEdgeIterator cbeginEdges() const { return _graph.cbeginEdges(); }
+    ConstEdgeIterator cendEdges()   const { return _graph.cendEdges(); }
+
+    auto edges()       { return _graph.edges(); }
+    auto edges() const { return _graph.edges(); }
+    auto constEdges() const { return _graph.constEdges(); }
+
+    // --- Capacity ---
+    std::size_t vertexCount() const { return _graph.vertexCount(); }
+    std::size_t edgeCount()   const { return _graph.edgeCount(); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return _graph.findEdge(from, to); }
+
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+
+    // --- Доступ к базовому графу ---
+    const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const { return _graph; }
+
+private:
+    struct _EmptyType {};
+
+    using _ConditionalVertexHT = std::conditional_t<std::is_void_v<VertexHash>,
+                                                    _EmptyType,
+                                                    std::unordered_map<VertexData, VertexDescriptor, VertexHash>>;
+
+    using _ConditionalEdgeMHT = std::conditional_t<(std::is_void_v<EdgeHash> || std::is_void_v<EdgeData>),
+                                                  _EmptyType,
+                                                  std::unordered_multimap<EdgeData, EdgeDescriptor, EdgeHash>>;
+
+    void _rebuildIndexes() {
+        if constexpr (!std::is_void_v<VertexHash>) {
+            _vht.clear();
+            for (auto v : _graph.vertices())
+                _vht.emplace(v.data(), v);
+        }
+
+        if constexpr (!std::is_void_v<EdgeHash> && !std::is_void_v<EdgeData>) {
+            _eht.clear();
+            for (auto e : _graph.edges())
+                _eht.emplace(e.data(), e);
+        }
+    }
+
+    UndirectedAbstractGraph<VertexData, EdgeData> _graph;
+    [[no_unique_address]] _ConditionalVertexHT _vht;
+    [[no_unique_address]] _ConditionalEdgeMHT _eht;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_UNDIRECTEDPSEUDOGRAPH_HPP
+
+namespace exx::incident {
+
+template<typename VertexData,
+         typename EdgeData,
+         typename VertexHash = std::hash<VertexData>,
+         typename EdgeHash = std::hash<EdgeData>>
+class UndirectedMultiGraph {
+public:
+    // --- Типы, совпадающие с типами псевдографа ---
+    using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::VertexDescriptor;
+    using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstVertexDescriptor;
+    using EdgeDescriptor        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::EdgeDescriptor;
+    using ConstEdgeDescriptor   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstEdgeDescriptor;
+
+    using VertexIterator        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::VertexIterator;
+    using ConstVertexIterator   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstVertexIterator;
+    using EdgeIterator          = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::EdgeIterator;
+    using ConstEdgeIterator     = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstEdgeIterator;
+
+    // --- Конструкторы ---
+    UndirectedMultiGraph() = default;
+
+    // Явное преобразование из произвольного абстрактного графа
+    explicit UndirectedMultiGraph(const UndirectedAbstractGraph<VertexData, EdgeData>& graph)
+        : _pseudo(graph) {}
+
+    // Копирование и перемещение
+    UndirectedMultiGraph(const UndirectedMultiGraph&) = default;
+    UndirectedMultiGraph(UndirectedMultiGraph&&) noexcept = default;
+
+    // Присваивание
+    UndirectedMultiGraph& operator=(const UndirectedMultiGraph&) = default;
+    UndirectedMultiGraph& operator=(UndirectedMultiGraph&&) noexcept = default;
+
+    // Обмен содержимым
+    void swap(UndirectedMultiGraph& other) noexcept {
+        _pseudo.swap(other._pseudo);
+    }
+
+    // --- Вершины (полностью делегируются) ---
+    template<typename... Args>
+    std::optional<VertexDescriptor> emplaceVertex(Args&&... args) {
+        return _pseudo.emplaceVertex(std::forward<Args>(args)...);
+    }
+
+    std::optional<VertexDescriptor> addVertex(const VertexData& data) {
+        return _pseudo.addVertex(data);
+    }
+
+    std::optional<VertexDescriptor> addVertex(VertexData&& data) {
+        return _pseudo.addVertex(std::move(data));
+    }
+
+    void removeVertex(VertexDescriptor v) {
+        _pseudo.removeVertex(v);
+    }
+
+    std::optional<VertexDescriptor> findVertex(const VertexData& data) const {
+        return _pseudo.findVertex(data);
+    }
+
+    bool containsVertex(const VertexData& data) const
+        requires (!std::is_void_v<VertexHash>)
+    {
+        return _pseudo.containsVertex(data);
+    }
+
+    // --- Рёбра с запретом петель ---
+    template<typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+        if (from == to) return std::nullopt;
+        return _pseudo.emplaceEdge(from, to, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData, typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to, T&& data) {
+        return emplaceEdge(from, to, std::forward<T>(data));
+    }
+
+    template<typename... Args>
+        requires (std::is_void_v<EdgeData>)
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to) {
+        if (from == to) return std::nullopt;
+        return _pseudo.addEdge(from, to);
+    }
+
+    void removeEdge(EdgeDescriptor e) {
+        _pseudo.removeEdge(e);
+    }
+
+    // Поиск рёбер по данным (делегируется)
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData>)
+    auto findEdge(const T& data) const {
+        return _pseudo.findEdge(data);
+    }
+
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData> && !std::is_void_v<EdgeHash>)
+    bool containsEdge(const T& data) const {
+        return _pseudo.containsEdge(data);
+    }
+
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData> && std::is_void_v<EdgeHash>)
+    bool containsEdge(const T& data) const {
+        return _pseudo.containsEdge(data);
+    }
+
+    // --- Итераторы и обход (делегируются) ---
+    VertexIterator beginVertices()             { return _pseudo.beginVertices(); }
+    VertexIterator endVertices()               { return _pseudo.endVertices(); }
+    ConstVertexIterator beginVertices()  const { return _pseudo.beginVertices(); }
+    ConstVertexIterator endVertices()    const { return _pseudo.endVertices(); }
+    ConstVertexIterator cbeginVertices() const { return _pseudo.cbeginVertices(); }
+    ConstVertexIterator cendVertices()   const { return _pseudo.cendVertices(); }
+
+    auto vertices()            { return _pseudo.vertices(); }
+    auto vertices()      const { return _pseudo.vertices(); }
+    auto constVertices() const { return _pseudo.constVertices(); }
+
+    EdgeIterator beginEdges()             { return _pseudo.beginEdges(); }
+    EdgeIterator endEdges()               { return _pseudo.endEdges(); }
+    ConstEdgeIterator beginEdges()  const { return _pseudo.beginEdges(); }
+    ConstEdgeIterator endEdges()    const { return _pseudo.endEdges(); }
+    ConstEdgeIterator cbeginEdges() const { return _pseudo.cbeginEdges(); }
+    ConstEdgeIterator cendEdges()   const { return _pseudo.cendEdges(); }
+
+    auto edges()            { return _pseudo.edges(); }
+    auto edges()      const { return _pseudo.edges(); }
+    auto constEdges() const { return _pseudo.constEdges(); }
+
+    // --- Количество элементов ---
+    std::size_t vertexCount() const { return _pseudo.vertexCount(); }
+    std::size_t edgeCount()   const { return _pseudo.edgeCount(); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return _pseudo.findEdge(from, to); }
+
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+
+    // --- Доступ к внутреннему псевдографу ---
+    const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>& basePseudoGraph() const {
+        return _pseudo;
+    }
+
+private:
+    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash> _pseudo;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_UNDIRECTEDMULTIGRAPH_HPP
+
+namespace exx::incident {
+
+template<typename VertexData,
+         typename EdgeData,
+         typename VertexHash = std::hash<VertexData>,
+         typename EdgeHash = std::hash<EdgeData>>
+class UndirectedGraph {
+public:
+    // --- Типы, совпадающие с типами мультиграфа ---
+    using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::VertexDescriptor;
+    using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstVertexDescriptor;
+    using EdgeDescriptor        = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::EdgeDescriptor;
+    using ConstEdgeDescriptor   = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstEdgeDescriptor;
+
+    using VertexIterator        = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::VertexIterator;
+    using ConstVertexIterator   = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstVertexIterator;
+    using EdgeIterator          = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::EdgeIterator;
+    using ConstEdgeIterator     = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstEdgeIterator;
+
+    // --- Конструкторы ---
+    UndirectedGraph() = default;
+
+    explicit UndirectedGraph(const UndirectedAbstractGraph<VertexData, EdgeData>& graph)
+        : _graph(graph) {}
+
+    UndirectedGraph(const UndirectedGraph&) = default;
+    UndirectedGraph(UndirectedGraph&&) noexcept = default;
+    UndirectedGraph& operator=(const UndirectedGraph&) = default;
+    UndirectedGraph& operator=(UndirectedGraph&&) noexcept = default;
+
+    void swap(UndirectedGraph& other) noexcept {
+        _graph.swap(other._graph);
+    }
+
+    // --- Вершины (полностью делегируются) ---
+    template<typename... Args>
+    std::optional<VertexDescriptor> emplaceVertex(Args&&... args) {
+        return _graph.emplaceVertex(std::forward<Args>(args)...);
+    }
+
+    std::optional<VertexDescriptor> addVertex(const VertexData& data) {
+        return _graph.addVertex(data);
+    }
+
+    std::optional<VertexDescriptor> addVertex(VertexData&& data) {
+        return _graph.addVertex(std::move(data));
+    }
+
+    void removeVertex(VertexDescriptor v) {
+        _graph.removeVertex(v);
+    }
+
+    std::optional<VertexDescriptor> findVertex(const VertexData& data) const {
+        return _graph.findVertex(data);
+    }
+
+    bool containsVertex(const VertexData& data) const
+        requires (!std::is_void_v<VertexHash>)
+    {
+        return _graph.containsVertex(data);
+    }
+
+    // --- Рёбра с запретом кратных ---
+    template<typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+        if (_graph.hasEdge(from, to)) return std::nullopt;
+        return _graph.emplaceEdge(from, to, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData, typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to, T&& data) {
+        return emplaceEdge(from, to, std::forward<T>(data));
+    }
+
+    template<typename... Args>
+        requires (std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
+        if (from == to) return std::nullopt;
+        if (_graph.hasEdge(from, to)) return std::nullopt;
+        return _graph.addEdge(from, to);
+    }
+
+    void removeEdge(EdgeDescriptor e) {
+        _graph.removeEdge(e);
+    }
+
+    // --- Проверка существования ребра ---
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const {
+        return _graph.hasEdge(from, to);
+    }
+
+    // Поиск рёбер по данным (делегируется)
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData>)
+    auto findEdge(const T& data) const {
+        return _graph.findEdge(data);
+    }
+
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData> && !std::is_void_v<EdgeHash>)
+    bool containsEdge(const T& data) const {
+        return _graph.containsEdge(data);
+    }
+
+    template <typename T = EdgeData>
+        requires (!std::is_void_v<EdgeData> && std::is_void_v<EdgeHash>)
+    bool containsEdge(const T& data) const {
+        return _graph.containsEdge(data);
+    }
+
+    // --- Итераторы и обход (делегируются) ---
+    VertexIterator beginVertices()             { return _graph.beginVertices(); }
+    VertexIterator endVertices()               { return _graph.endVertices(); }
+    ConstVertexIterator beginVertices()  const { return _graph.beginVertices(); }
+    ConstVertexIterator endVertices()    const { return _graph.endVertices(); }
+    ConstVertexIterator cbeginVertices() const { return _graph.cbeginVertices(); }
+    ConstVertexIterator cendVertices()   const { return _graph.cendVertices(); }
+
+    auto vertices()            { return _graph.vertices(); }
+    auto vertices()      const { return _graph.vertices(); }
+    auto constVertices() const { return _graph.constVertices(); }
+
+    EdgeIterator beginEdges()             { return _graph.beginEdges(); }
+    EdgeIterator endEdges()               { return _graph.endEdges(); }
+    ConstEdgeIterator beginEdges()  const { return _graph.beginEdges(); }
+    ConstEdgeIterator endEdges()    const { return _graph.endEdges(); }
+    ConstEdgeIterator cbeginEdges() const { return _graph.cbeginEdges(); }
+    ConstEdgeIterator cendEdges()   const { return _graph.cendEdges(); }
+
+    auto edges()            { return _graph.edges(); }
+    auto edges()      const { return _graph.edges(); }
+    auto constEdges() const { return _graph.constEdges(); }
+
+    // --- Количество элементов ---
+    std::size_t vertexCount() const { return _graph.vertexCount(); }
+    std::size_t edgeCount()   const { return _graph.edgeCount(); }
+
+    // --- Доступ к внутреннему мультиграфу (только чтение) ---
+    const UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash>& baseMultiGraph() const {
+        return _graph;
+    }
+
+private:
+    UndirectedMultiGraph<VertexData, EdgeData, VertexHash, EdgeHash> _graph;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_UNDIRECTEDGRAPH_HPP
+
+namespace exx::incident {
+
 enum class PrimError {
-    GraphContainsRepeatingVertexes,
     DisconnectedGraph
 };
 
-std::string to_string(PrimError e) {
+inline std::string to_string(PrimError e) {
     switch (e) {
     case PrimError::DisconnectedGraph:
         return "Граф не является связным";
-    case PrimError::GraphContainsRepeatingVertexes:
-        return "Граф содержит повторяющиеся вершины";
     }
     return "Неизвестная ошибка";
 }
 
 template<typename VertexData,
          typename EdgeData,
-         typename VHash = std::hash<VertexData>,
-         typename VEqual = std::equal_to<VertexData>>
-std::expected<UndirectedAbstractGraph<VertexData, EdgeData>, PrimError>
-mstPrim(const UndirectedAbstractGraph<VertexData, EdgeData>& graph,
-        VHash vHash = VHash{},
-        VEqual vEqual = VEqual{})
+         typename VHash,
+         typename EHash>
+    requires (!std::is_void_v<EdgeData> && !std::is_void_v<VHash> && std::is_copy_constructible_v<EdgeData>)
+std::expected<UndirectedGraph<VertexData, EdgeData, VHash, EHash>, PrimError>
+mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash, EHash>& graph)
 {
-    using _Graph = UndirectedAbstractGraph<VertexData, EdgeData>;
+    using GraphType = UndirectedGraph<VertexData, EdgeData, VHash, EHash>;
+    using VertexDesc = typename GraphType::VertexDescriptor;
+    using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
+    if (graph.vertexCount() == 0) return GraphType{};
 
-    using _СHashMap = std::unordered_map<VertexData,
-                                       typename _Graph::ConstVertexDescriptor,
-                                       VHash,
-                                       VEqual>;
+    GraphType mst;
+    for (auto v : graph.constVertices()) mst.addVertex(v.data());
 
-    using _HashMap = std::unordered_map<VertexData,
-                                        typename _Graph::VertexDescriptor,
-                                        VHash,
-                                        VEqual>;
-
-    {
-        std::unordered_set<VertexData, VHash, VEqual> uniqueChecker(0, vHash, vEqual);
-        for (auto v : graph.vertices()) {
-            const VertexData& data = v.data();
-            if (!uniqueChecker.insert(data).second)
-                return std::unexpected(PrimError::GraphContainsRepeatingVertexes);
-        }
-    }
-
-    if (graph.vertexCount() == 0) return _Graph{};
-
-    _СHashMap originalVerticesDescriptorsCollection(0, vHash, vEqual);
-
-    for (auto vD : graph.constVertices()) originalVerticesDescriptorsCollection.insert( { vD.data(), vD } );
-
-    _Graph mst;
-    _HashMap mstVerticesDescriptorsCollection(0, vHash, vEqual);
-
-    for (const auto& [vData, _] : originalVerticesDescriptorsCollection) {
-        VertexData id = vData;
-        mstVerticesDescriptorsCollection[id] = mst.addVertex(id);
-    }
-
-    if (graph.edgeCount() == 0) return mst;
-
-    struct _QueueEl {
-        EdgeData _eData;
-        VertexData _1;
-        VertexData _2;
+    struct QueueElement {
+        EdgeData weight;
+        VertexData vertexData;
+        VertexData parentData;
     };
+    auto cmp = [](const QueueElement& a, const QueueElement& b) {
+        return a.weight > b.weight;
+    };
+    std::priority_queue<QueueElement, std::vector<QueueElement>, decltype(cmp)> pq(cmp);
 
-    auto cmp = [](const _QueueEl& a, const _QueueEl& b) { return a._eData > b._eData; };
-
-    std::priority_queue<_QueueEl, std::vector<_QueueEl>, decltype(cmp)> pq(cmp);
-
-    std::unordered_set<VertexData, VHash, VEqual> visited(0, vHash, vEqual);
-    VertexData startData = originalVerticesDescriptorsCollection.begin()->first;
+    std::unordered_set<VertexData, VHash> visited(0, VHash{});
+    VertexData startData = (*graph.constVertices().begin()).data();
     visited.insert(startData);
 
-    auto startDescr = originalVerticesDescriptorsCollection[startData];
-    for (auto edge : startDescr.incidentEdges()) {
-        auto other = edge.otherEnd(startDescr);
-        VertexData otherData = other.data();
-        EdgeData w = edge.data();
-        pq.push( { w, otherData, startData } );
+    ConstVertexDesc startDesc = (*graph.beginVertices());
+
+    for (auto edge : startDesc.incidentEdges()) {
+        auto otherDesc = edge.otherEnd(startDesc);
+        VertexData otherData = otherDesc->data();
+        if (!visited.contains(otherData))
+            pq.push({edge.data(), otherData, startData});
     }
 
     while (!pq.empty()) {
-        auto [w, vData, parentData] = pq.top();
+        auto [weight, vData, parentData] = pq.top();
         pq.pop();
+
         if (visited.contains(vData)) continue;
-
         visited.insert(vData);
-        mst.addEdge(mstVerticesDescriptorsCollection[parentData],
-                    mstVerticesDescriptorsCollection[vData],
-                    w);
 
-        auto vDescr = originalVerticesDescriptorsCollection[vData];
-        for (auto edge : vDescr.incidentEdges()) {
-            auto other = edge.otherEnd(vDescr);
-            VertexData otherData = other.data();
+        auto parentDescOpt = mst.findVertex(parentData);
+        auto vDescOpt = mst.findVertex(vData);
+        if (!parentDescOpt || !vDescOpt) throw ("bebe");
+        mst.addEdge(*parentDescOpt, *vDescOpt, weight);
+
+        auto vDescOrigOpt = graph.findVertex(vData);
+        if (!vDescOrigOpt) throw ("bubu");
+        VertexDesc vDesc = *vDescOrigOpt;
+
+        for (auto edge : vDesc.incidentEdges()) {
+            auto otherDesc = edge.otherEnd(vDesc);
+            VertexData otherData = otherDesc->data();
             if (!visited.contains(otherData))
-                pq.push( { edge.data(), otherData, vData } );
+                pq.push({edge.data(), otherData, vData});
         }
     }
 

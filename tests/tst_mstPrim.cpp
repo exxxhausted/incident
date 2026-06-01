@@ -28,7 +28,6 @@ bool hasEdge(const UndirectedAbstractGraph<VD, ED>& g, int u, int v, ED w) {
 
 TEST_CASE("mstPrim works correctly on simple graphs", "[prim]") {
     SECTION("Graph 1: triangle with weights 1,2,3") {
-        // Матрица смежности для треугольника (0-1:1, 0-2:2, 1-2:3)
         int raw[] = {
             0, 1, 2,
             1, 0, 3,
@@ -36,16 +35,18 @@ TEST_CASE("mstPrim works correctly on simple graphs", "[prim]") {
         };
         auto view = MatrixView<int>(raw, 3, 3);
         auto graph = make_graph_from_matrix<int>(view, 0);
-        auto mst = mstPrim(graph);
+        auto mstEx = mstPrim(UndirectedGraph(graph));
+        REQUIRE(mstEx.has_value());
+        auto mst = mstEx->baseMultiGraph().basePseudoGraph().baseAbstractGraph();
 
         // MST должен содержать 2 ребра, общий вес 1+2 = 3
-        REQUIRE(mst->vertexCount() == 3);
-        REQUIRE(mst->edgeCount() == 2);
-        REQUIRE(totalWeight(*mst) == 3);
-        REQUIRE(hasEdge(*mst, 0, 1, 1));
-        REQUIRE(hasEdge(*mst, 0, 2, 2));
+        REQUIRE(mst.vertexCount() == 3);
+        REQUIRE(mst.edgeCount() == 2);
+        REQUIRE(totalWeight(mst) == 3);
+        REQUIRE(hasEdge(mst, 0, 1, 1));
+        REQUIRE(hasEdge(mst, 0, 2, 2));
         // Ребро 1-2 (вес 3) не должно быть
-        REQUIRE_FALSE(hasEdge(*mst, 1, 2, 3));
+        REQUIRE_FALSE(hasEdge(mst, 1, 2, 3));
     }
 
     SECTION("Graph 2: square with diagonal (K4 with one missing)") {
@@ -58,25 +59,15 @@ TEST_CASE("mstPrim works correctly on simple graphs", "[prim]") {
         };
         auto view = MatrixView<int>(raw, 4, 4);
         auto graph = make_graph_from_matrix<int>(view, 0);
-        auto mst = mstPrim(graph);
+        auto mstEx = mstPrim(UndirectedGraph(graph));
+        auto mst = mstEx->baseMultiGraph().basePseudoGraph().baseAbstractGraph();
 
-        // MST должен весить 1+2+3 = 6 (рёбра 0-2, 0-1, 1-2? Нет, 1-2 даст цикл. Правильно: 0-2(1), 0-1(2), 0-3(4) – это вес 7, но есть вариант: 0-2(1), 1-2(3), 2-3(5) – вес 9; или 0-2(1), 0-1(2), 2-3(5) – вес 8. На самом деле минимальный MST: 0-2(1), 0-1(2), 2-3(5) сумма 8? Но есть 0-3(4) дешевле 5, значит: 0-2(1), 0-1(2), 0-3(4) = 7. Проверим: три ребра, все инцидентны 0, не образуют цикла. Да, это MST весом 7.
-        REQUIRE(mst->vertexCount() == 4);
-        REQUIRE(mst->edgeCount() == 3);
-        REQUIRE(totalWeight(*mst) == 7);
-        REQUIRE(hasEdge(*mst, 0, 1, 2));
-        REQUIRE(hasEdge(*mst, 0, 2, 1));
-        REQUIRE(hasEdge(*mst, 0, 3, 4));
-    }
-
-    SECTION("Duplicate vertex data") {
-        // Создаём граф с двумя вершинами, у которых одинаковые данные (оба = 1)
-        UndirectedAbstractGraph<int, int> g;
-        auto v1 = g.addVertex(1);
-        auto v2 = g.addVertex(1); // одинаковое значение
-        g.addEdge(v1, v2, 10);
-        // Должно выбросить исключение при вызове mstPrim
-        REQUIRE(mstPrim(g).error() == PrimError::GraphContainsRepeatingVertexes);
+        REQUIRE(mst.vertexCount() == 4);
+        REQUIRE(mst.edgeCount() == 3);
+        REQUIRE(totalWeight(mst) == 7);
+        REQUIRE(hasEdge(mst, 0, 1, 2));
+        REQUIRE(hasEdge(mst, 0, 2, 1));
+        REQUIRE(hasEdge(mst, 0, 3, 4));
     }
 
     SECTION("Disconnected graph") {
@@ -88,6 +79,6 @@ TEST_CASE("mstPrim works correctly on simple graphs", "[prim]") {
         };
         auto view = MatrixView<int>(raw, 3, 3);
         auto graph = make_graph_from_matrix<int>(view, 0);
-        REQUIRE(mstPrim(graph).error() == PrimError::DisconnectedGraph);
+        REQUIRE(mstPrim(UndirectedGraph(graph)).error() == PrimError::DisconnectedGraph);
     }
 }

@@ -3,8 +3,9 @@
 
 #include <list>
 #include <ranges>
-#include <stdexcept>
 #include <type_traits>
+#include <optional>
+#include <unordered_map>
 
 namespace exx::incident {
 
@@ -82,6 +83,9 @@ private:
             return std::views::transform(_label->_incidentEdges,
                                          [](const _EdgeLabel& el) { return _EdgeDescriptor<isConst>(el); });
         }
+
+        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -108,14 +112,17 @@ private:
         _VertexDescriptor<isConst> v1() const { return _VertexDescriptor<isConst>(_label->_v1); }
         _VertexDescriptor<isConst> v2() const { return _VertexDescriptor<isConst>(_label->_v2); }
 
-        _VertexDescriptor<isConst> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
+        std::optional<_VertexDescriptor<isConst>> otherEnd(const _VertexDescriptor<isConst>& vertex) const {
             if (vertex._label == _label->_v1)
                 return _VertexDescriptor<isConst>(_label->_v2);
             else if (vertex._label == _label->_v2)
                 return _VertexDescriptor<isConst>(_label->_v1);
             else
-                throw std::invalid_argument("Vertex is not incident to this edge");
+                return std::nullopt;
         }
+
+        bool operator==(const _EdgeDescriptor& other) const { return _label == other._label; }
+        bool operator!=(const _EdgeDescriptor& other) const { return !(*this == other); }
     };
 
     // ---------- Iterators ----------
@@ -197,6 +204,42 @@ public:
     using EdgeIterator        = _EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = _EdgeIteratorImpl<true>;
 
+    UndirectedAbstractGraph() = default;
+
+    // Конструктор копирования (глубокое копирование)
+    UndirectedAbstractGraph(const UndirectedAbstractGraph& other) {
+        std::unordered_map<const _Vertex*, VertexDescriptor> origToNew;
+
+        for (const auto& origVertex : other._vertices) {
+            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            origToNew[&origVertex] = newV;
+        }
+
+        for (const auto& origEdge : other._edges) {
+            VertexDescriptor newV1 = origToNew[&(*origEdge._v1)];
+            VertexDescriptor newV2 = origToNew[&(*origEdge._v2)];
+
+            if constexpr (std::is_void_v<EdgeData>) addEdge(newV1, newV2);
+            else addEdge(newV1, newV2, origEdge._data);
+        }
+    }
+
+    // Конструктор перемещения
+    UndirectedAbstractGraph(UndirectedAbstractGraph&&) noexcept = default;
+
+    // Копирующее присваивание (через copy-and-swap)
+    UndirectedAbstractGraph& operator=(const UndirectedAbstractGraph& other) {
+        if (this != &other) {
+            UndirectedAbstractGraph temp(other);
+            *this = std::move(temp);
+        }
+        return *this;
+    }
+
+    // Перемещающее присваивание
+    UndirectedAbstractGraph& operator=(UndirectedAbstractGraph&&) noexcept = default;
+
+
     // ---------- Vertex operations ----------
     template<typename... Args>
     VertexDescriptor emplaceVertex(Args&&... args) {
@@ -206,6 +249,7 @@ public:
     }
 
     VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
+    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
 
     void removeVertex(VertexDescriptor vertex) {
         // Make a copy because the incident edge list will be modified during iteration
@@ -229,10 +273,13 @@ public:
         return EdgeDescriptor(it);
     }
 
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, const EdgeData& data)
+    // Шаблонная версия addEdge
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
-    { return emplaceEdge(from, to, data); }
+    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, T&& data)
+    { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    // Специализация для void EdgeData
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
     {
@@ -290,6 +337,13 @@ public:
     // ---------- Capacity ----------
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount() const { return _edges.size(); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+        for(auto e : from.incidentEdges()) if(*e.otherEnd(from) == to) return e;
+        return std::nullopt;
+    }
+
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
