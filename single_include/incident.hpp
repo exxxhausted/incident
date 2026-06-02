@@ -2733,17 +2733,25 @@ template<typename VertexData,
          typename EdgeData,
          typename VHash>
     requires (!std::is_void_v<EdgeData> &&
-            std::is_copy_constructible_v<EdgeData>)
+             std::is_copy_constructible_v<EdgeData>)
 auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     -> std::expected<UndirectedGraph<VertexData, EdgeData, VHash>, PrimError>
 {
     using GraphType = UndirectedGraph<VertexData, EdgeData, VHash>;
     using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
+    using VertexDesc = typename GraphType::VertexDescriptor;
 
     if (graph.vertexCount() == 0) return GraphType{};
 
     GraphType mst;
-    for (auto v : graph.constVertices()) mst.addVertex(v.data());
+    std::unordered_map<ConstVertexDesc,
+                       VertexDesc,
+                       typename GraphType::VertexDescriptorHash> newDescOf;
+
+    for (auto v : graph.constVertices()) {
+        VertexDesc newDesc = mst.addVertex(v.data());
+        newDescOf[v] = newDesc;
+    }
 
     struct QueueElement {
         EdgeData weight;
@@ -2753,16 +2761,20 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     auto cmp = [](const QueueElement& a, const QueueElement& b) {
         return a.weight > b.weight;
     };
-    std::priority_queue<QueueElement, std::vector<QueueElement>, decltype(cmp)> pq(cmp);
+    std::priority_queue<QueueElement,
+                        std::vector<QueueElement>,
+                        decltype(cmp)> pq(cmp);
 
-    std::unordered_set<ConstVertexDesc, typename GraphType::VertexDescriptorHash> visited;
+    std::unordered_set<ConstVertexDesc,
+                       typename GraphType::VertexDescriptorHash> visited;
 
     ConstVertexDesc startDesc = *graph.constVertices().begin();
     visited.insert(startDesc);
 
     for (auto edge : startDesc.incidentEdges()) {
-        auto otherDesc = edge.otherEnd(startDesc); // always not-nullopt optional
-        if (!visited.contains(*otherDesc)) pq.push({edge.data(), *otherDesc, startDesc});
+        auto otherDesc = edge.otherEnd(startDesc); // всегда валидный
+        if (!visited.contains(*otherDesc))
+            pq.push({ edge.data(), *otherDesc, startDesc });
     }
 
     while (!pq.empty()) {
@@ -2772,12 +2784,12 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
         if (visited.contains(vDesc)) continue;
         visited.insert(vDesc);
 
-        mst.addEdge(parentDesc.data(), vDesc.data(), weight);
+        mst.addEdge(newDescOf[parentDesc], newDescOf[vDesc], weight);
 
         for (auto edge : vDesc.incidentEdges()) {
-            auto otherDesc = edge.otherEnd(vDesc); // always not-nullopt optional
+            auto otherDesc = edge.otherEnd(vDesc); // всегда валидный
             if (!visited.contains(*otherDesc))
-                pq.push({edge.data(), *otherDesc, vDesc});
+                pq.push({ edge.data(), *otherDesc, vDesc });
         }
     }
 
