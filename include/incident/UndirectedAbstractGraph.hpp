@@ -197,8 +197,19 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;

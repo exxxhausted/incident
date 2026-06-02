@@ -16,8 +16,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexIterator;

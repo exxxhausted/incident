@@ -188,8 +188,19 @@ public:
     // Публичные типы
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
     using ArcDescriptor         = ArcDescriptorImpl<false>;
     using ConstArcDescriptor    = ArcDescriptorImpl<true>;
+    struct ArcDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const ArcDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -504,8 +515,19 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -658,8 +680,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexIterator;
@@ -887,8 +912,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedPseudoGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedPseudoGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexIterator;
@@ -1042,8 +1070,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedMultiGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedMultiGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexIterator;
@@ -1394,8 +1425,19 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -1756,7 +1798,6 @@ make_graph_from_matrix(M&& mat, EdgeData noEdgeValue = EdgeData{}) {
 #include <unordered_set>
 #include <vector>
 #include <expected>
-#include <string>
 
 #ifndef EXX_UNDIRECTEDGRAPH_HPP
 #define EXX_UNDIRECTEDGRAPH_HPP
@@ -1971,8 +2012,19 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -2125,8 +2177,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedAbstractGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexIterator;
@@ -2354,8 +2409,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedPseudoGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedPseudoGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexIterator;
@@ -2509,8 +2567,11 @@ public:
 
     using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
+    using VertexDescriptorHash  = typename UndirectedMultiGraph<VertexData, EdgeData>::VertexDescriptorHash;
+
     using EdgeDescriptor        = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::EdgeDescriptor;
     using ConstEdgeDescriptor   = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstEdgeDescriptor;
+    using EdgeDescriptorHash    = typename UndirectedMultiGraph<VertexData, EdgeData>::EdgeDescriptorHash;
 
     using VertexIterator        = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexIterator;
     using ConstVertexIterator   = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexIterator;
@@ -2671,15 +2732,14 @@ inline std::string to_string(PrimError e) {
 template<typename VertexData,
          typename EdgeData,
          typename VHash>
-requires (!std::is_void_v<EdgeData> &&
-          !std::is_void_v<VHash> &&
-          std::is_copy_constructible_v<EdgeData>)
+    requires (!std::is_void_v<EdgeData> &&
+            std::is_copy_constructible_v<EdgeData>)
 auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     -> std::expected<UndirectedGraph<VertexData, EdgeData, VHash>, PrimError>
 {
     using GraphType = UndirectedGraph<VertexData, EdgeData, VHash>;
-    using VertexDesc = typename GraphType::VertexDescriptor;
     using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
+
     if (graph.vertexCount() == 0) return GraphType{};
 
     GraphType mst;
@@ -2687,48 +2747,37 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
 
     struct QueueElement {
         EdgeData weight;
-        VertexData vertexData;
-        VertexData parentData;
+        ConstVertexDesc vertex;
+        ConstVertexDesc parent;
     };
     auto cmp = [](const QueueElement& a, const QueueElement& b) {
         return a.weight > b.weight;
     };
     std::priority_queue<QueueElement, std::vector<QueueElement>, decltype(cmp)> pq(cmp);
 
-    std::unordered_set<VertexData, VHash> visited(0, VHash{});
-    VertexData startData = (*graph.constVertices().begin()).data();
-    visited.insert(startData);
+    std::unordered_set<ConstVertexDesc, typename GraphType::VertexDescriptorHash> visited;
 
-    ConstVertexDesc startDesc = (*graph.beginVertices());
+    ConstVertexDesc startDesc = *graph.constVertices().begin();
+    visited.insert(startDesc);
 
     for (auto edge : startDesc.incidentEdges()) {
         auto otherDesc = edge.otherEnd(startDesc);
-        VertexData otherData = otherDesc->data();
-        if (!visited.contains(otherData))
-            pq.push({edge.data(), otherData, startData});
+        if (!visited.contains(*otherDesc)) pq.push({edge.data(), *otherDesc, startDesc});
     }
 
     while (!pq.empty()) {
-        auto [weight, vData, parentData] = pq.top();
+        auto [weight, vDesc, parentDesc] = pq.top();
         pq.pop();
 
-        if (visited.contains(vData)) continue;
-        visited.insert(vData);
+        if (visited.contains(vDesc)) continue;
+        visited.insert(vDesc);
 
-        auto parentDescOpt = mst.findVertex(parentData);
-        auto vDescOpt = mst.findVertex(vData);
-        if (!parentDescOpt || !vDescOpt) throw ("bebe");
-        mst.addEdge(*parentDescOpt, *vDescOpt, weight);
-
-        auto vDescOrigOpt = graph.findVertex(vData);
-        if (!vDescOrigOpt) throw ("bubu");
-        VertexDesc vDesc = *vDescOrigOpt;
+        mst.addEdge(parentDesc.data(), vDesc.data(), weight);
 
         for (auto edge : vDesc.incidentEdges()) {
             auto otherDesc = edge.otherEnd(vDesc);
-            VertexData otherData = otherDesc->data();
-            if (!visited.contains(otherData))
-                pq.push({edge.data(), otherData, vData});
+            if (!visited.contains(*otherDesc))
+                pq.push({edge.data(), *otherDesc, vDesc});
         }
     }
 

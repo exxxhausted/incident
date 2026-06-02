@@ -185,8 +185,19 @@ public:
     // Публичные типы
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
     using ArcDescriptor         = ArcDescriptorImpl<false>;
     using ConstArcDescriptor    = ArcDescriptorImpl<true>;
+    struct ArcDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const ArcDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
