@@ -72,6 +72,18 @@ public:
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    template<typename T, typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData,
+                                          T&& data)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
+    }
+
     template<typename... Args>
         requires (std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
@@ -79,7 +91,19 @@ public:
         return _pseudoGraph.addEdge(from, to);
     }
 
+    template<typename... Args>
+        requires (std::is_void_v<EdgeData>)
+    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return;
+        return addEdge(*fromOpt, *toOpt);
+    }
+
     void removeEdge(EdgeDescriptor e) { _pseudoGraph.removeEdge(e); }
+
+    void removeEdge(const VertexData& fromData, const VertexData& toData)
+    { _pseudoGraph.removeEdge(fromData, toData); }
 
     VertexIterator beginVertices()             { return _pseudoGraph.beginVertices(); }
     VertexIterator endVertices()               { return _pseudoGraph.endVertices(); }
@@ -106,11 +130,21 @@ public:
     std::size_t vertexCount() const { return _pseudoGraph.vertexCount(); }
     std::size_t edgeCount()   const { return _pseudoGraph.edgeCount(); }
 
-    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _pseudoGraph.findEdge(from, to); }
+    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return _pseudoGraph.findEdge(from, to); }
+
+    std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
+    { return _pseudoGraph.findEdge(fromData, toData); }
+    std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
+    { return _pseudoGraph.findEdge(fromData, toData); }
 
     bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    bool hasEdge(const VertexData& fromData, const VertexData& toData) const
+    { return _pseudoGraph.hasEdge(fromData, toData); }
 
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }

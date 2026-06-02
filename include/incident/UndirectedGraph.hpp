@@ -71,6 +71,18 @@ public:
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    template<typename T, typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData,
+                                          T&& data)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
+    }
+
     template<typename... Args>
         requires (std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
@@ -79,13 +91,35 @@ public:
         return _multiGraph.addEdge(from, to);
     }
 
+    template<typename... Args>
+        requires (std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData) {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return addEdge(*fromOpt, *toOpt);
+    }
+
     void removeEdge(EdgeDescriptor e) { _multiGraph.removeEdge(e); }
 
-    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    void removeEdge(const VertexData& fromData, const VertexData& toData)
+    { _multiGraph.removeEdge(fromData, toData); }
+
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _multiGraph.findEdge(from, to); }
+    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return _multiGraph.findEdge(from, to); }
+
+    std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
+    { return _multiGraph.findEdge(fromData, toData); }
+    std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
+    { return _multiGraph.findEdge(fromData, toData); }
 
     bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
     { return _multiGraph.hasEdge(from, to); }
+
+    bool hasEdge(const VertexData& fromData, const VertexData& toData) const
+    { return _multiGraph.hasEdge(fromData, toData); }
 
     VertexIterator beginVertices()             { return _multiGraph.beginVertices(); }
     VertexIterator endVertices()               { return _multiGraph.endVertices(); }

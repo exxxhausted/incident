@@ -10,67 +10,67 @@ namespace exx::incident {
 template<typename VertexData, typename ArcData>
 class DirectedAbstractGraph {
 private:
-    struct _Vertex;
-    struct _Arc;
+    struct Vertex;
+    struct Arc;
 
-    using _VertexList       = std::list<_Vertex>;
-    using _ArcList          = std::list<_Arc>;
-    using _VertexLabel      = typename _VertexList::iterator;
-    using _VertexConstLabel = typename _VertexList::const_iterator;
-    using _ArcLabel         = typename _ArcList::iterator;
-    using _ArcConstLabel    = typename _ArcList::const_iterator;
+    using VertexList       = std::list<Vertex>;
+    using ArcList          = std::list<Arc>;
+    using VertexLabel      = typename VertexList::iterator;
+    using VertexConstLabel = typename VertexList::const_iterator;
+    using ArcLabel         = typename ArcList::iterator;
+    using ArcConstLabel    = typename ArcList::const_iterator;
 
-    struct _EmptyArcData final {};
-    using _ArcData = std::conditional_t<std::is_void_v<ArcData>, _EmptyArcData, ArcData>;
+    struct EmptyArcData final {};
+    using ConditionalArcData = std::conditional_t<std::is_void_v<ArcData>, EmptyArcData, ArcData>;
 
-    struct _EraseAccelerationMetaData {
-        typename std::list<_ArcLabel>::iterator _posInFrom{};
+    struct EraseAccelerationMetaData {
+        typename std::list<ArcLabel>::iterator _posInFrom{};
     };
 
-    struct _Arc {
-        _VertexLabel _from;
-        _VertexLabel _to;
-        [[no_unique_address]] _ArcData _data;
-        _EraseAccelerationMetaData _meta{};
+    struct Arc {
+        VertexLabel _from;
+        VertexLabel _to;
+        [[no_unique_address]] ConditionalArcData _data;
+        EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
             requires (!std::is_void_v<ArcData>)
-        _Arc(_VertexLabel from, _VertexLabel to, Args&&... args)
+        Arc(VertexLabel from, VertexLabel to, Args&&... args)
             : _from(from), _to(to), _data(std::forward<Args>(args)...) {}
 
-        _Arc(_VertexLabel from, _VertexLabel to)
+        Arc(VertexLabel from, VertexLabel to)
             requires (std::is_void_v<ArcData>)
             : _from(from), _to(to) {}
     };
 
-    struct _Vertex {
-        std::list<_ArcLabel> _adjacentArcs;
+    struct Vertex {
+        std::list<ArcLabel> _adjacentArcs;
         VertexData _data;
         template<typename... Args>
-        explicit _Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
+        explicit Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
     };
 
-    _VertexList _vertices;
-    _ArcList    _arcs;
+    VertexList _vertices;
+    ArcList    _arcs;
 
     // ---------- Внутренние дескрипторы (без итераторных операций) ----------
     template<bool isConst>
-    class _VertexDescriptor {
+    class VertexDescriptorImpl {
     private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
-        _ConditionalVertexLabel _label;
+        using ConditionalVertexLabel = std::conditional_t<isConst, VertexConstLabel, VertexLabel>;
+        ConditionalVertexLabel _label;
 
         friend class DirectedAbstractGraph;
 
     public:
-        _VertexDescriptor() = default;
-        _VertexDescriptor(const _VertexDescriptor&) = default;
-        _VertexDescriptor& operator=(const _VertexDescriptor&) = default;
+        VertexDescriptorImpl() = default;
+        VertexDescriptorImpl(const VertexDescriptorImpl&) = default;
+        VertexDescriptorImpl& operator=(const VertexDescriptorImpl&) = default;
 
-        explicit _VertexDescriptor(_ConditionalVertexLabel label) : _label(label) {}
+        explicit VertexDescriptorImpl(ConditionalVertexLabel label) : _label(label) {}
 
         // Конвертация из неконстантного в константный
-        _VertexDescriptor(const _VertexDescriptor<false>& other) requires isConst
+        VertexDescriptorImpl(const VertexDescriptorImpl<false>& other) requires isConst
             : _label(other._label) {}
 
         auto& data()       requires (!isConst) { return _label->_data; }
@@ -78,120 +78,120 @@ private:
 
         auto adjacentArcs() const {
             return std::views::transform(_label->_adjacentArcs,
-                                         [](const _ArcLabel& al) { return _ArcDescriptor<isConst>(al); });
+                                         [](const ArcLabel& al) { return ArcDescriptorImpl<isConst>(al); });
         }
 
-        bool operator==(const _VertexDescriptor& other) const { return _label == other._label; }
-        bool operator!=(const _VertexDescriptor& other) const { return !(*this == other); }
+        bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
+        bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
-    class _ArcDescriptor {
+    class ArcDescriptorImpl {
     private:
-        using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
-        _ConditionalArcLabel _label;
+        using ConditionalArcLabel = std::conditional_t<isConst, ArcConstLabel, ArcLabel>;
+        ConditionalArcLabel _label;
 
         friend class DirectedAbstractGraph;
 
     public:
-        _ArcDescriptor() = default;
-        _ArcDescriptor(const _ArcDescriptor&) = default;
-        _ArcDescriptor& operator = (const _ArcDescriptor&) = default;
+        ArcDescriptorImpl() = default;
+        ArcDescriptorImpl(const ArcDescriptorImpl&) = default;
+        ArcDescriptorImpl& operator = (const ArcDescriptorImpl&) = default;
 
-        explicit _ArcDescriptor(_ConditionalArcLabel label) : _label(label) {}
+        explicit ArcDescriptorImpl(ConditionalArcLabel label) : _label(label) {}
 
-        _ArcDescriptor(const _ArcDescriptor<false>& other) requires isConst
+        ArcDescriptorImpl(const ArcDescriptorImpl<false>& other) requires isConst
             : _label(other._label) {}
 
         auto& data()       requires (!std::is_void_v<ArcData> && !isConst) { return _label->_data; }
         const auto& data() const requires (!std::is_void_v<ArcData>) { return _label->_data; }
 
-        _VertexDescriptor<isConst> from() const { return _VertexDescriptor<isConst>(_label->_from); }
-        _VertexDescriptor<isConst> to()   const { return _VertexDescriptor<isConst>(_label->_to); }
+        VertexDescriptorImpl<isConst> from() const { return VertexDescriptorImpl<isConst>(_label->_from); }
+        VertexDescriptorImpl<isConst> to()   const { return VertexDescriptorImpl<isConst>(_label->_to); }
 
-        bool operator==(const _ArcDescriptor& other) const { return _label == other._label; }
-        bool operator!=(const _ArcDescriptor& other) const { return !(*this == other); }
+        bool operator==(const ArcDescriptorImpl& other) const { return _label == other._label; }
+        bool operator!=(const ArcDescriptorImpl& other) const { return !(*this == other); }
     };
 
     // ---------- Итераторы (только для обхода) ----------
     template<bool isConst>
-    class _VertexIterator {
+    class VertexIteratorImpl {
     private:
-        using _ConditionalVertexLabel = std::conditional_t<isConst, _VertexConstLabel, _VertexLabel>;
-        _ConditionalVertexLabel _it;
+        using ConditionalVertexLabel = std::conditional_t<isConst, VertexConstLabel, VertexLabel>;
+        ConditionalVertexLabel _it;
 
         friend class DirectedAbstractGraph;
 
     public:
         using difference_type       = std::ptrdiff_t;
-        using value_type            = _VertexDescriptor<isConst>;
+        using value_type            = VertexDescriptorImpl<isConst>;
         using reference             = value_type;
         using pointer               = void;
         using iterator_category     = std::forward_iterator_tag;
         using iterator_concept      = std::forward_iterator_tag;
 
-        _VertexIterator() = default;
-        _VertexIterator(const _VertexIterator&) = default;
-        _VertexIterator& operator = (const _VertexIterator&) = default;
+        VertexIteratorImpl() = default;
+        VertexIteratorImpl(const VertexIteratorImpl&) = default;
+        VertexIteratorImpl& operator = (const VertexIteratorImpl&) = default;
 
-        explicit _VertexIterator(_ConditionalVertexLabel it) : _it(it) {}
+        explicit VertexIteratorImpl(ConditionalVertexLabel it) : _it(it) {}
 
         // Конвертация из неконстантного в константный
-        _VertexIterator(const _VertexIterator<false>& other) requires isConst
+        VertexIteratorImpl(const VertexIteratorImpl<false>& other) requires isConst
             : _it(other._it) {}
 
         reference operator*() const { return value_type(_it); }
-        _VertexIterator& operator++() { ++_it; return *this; }
-        _VertexIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
+        VertexIteratorImpl& operator++() { ++_it; return *this; }
+        VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const _VertexIterator& other) const { return _it == other._it; }
-        bool operator!=(const _VertexIterator& other) const { return !(*this == other); }
+        bool operator==(const VertexIteratorImpl& other) const { return _it == other._it; }
+        bool operator!=(const VertexIteratorImpl& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
-    class _ArcIterator {
+    class ArcIteratorImpl {
     private:
-        using _ConditionalArcLabel = std::conditional_t<isConst, _ArcConstLabel, _ArcLabel>;
-        _ConditionalArcLabel _it;
+        using ConditionalArcLabel = std::conditional_t<isConst, ArcConstLabel, ArcLabel>;
+        ConditionalArcLabel _it;
 
         friend class DirectedAbstractGraph;
 
     public:
         using difference_type       = std::ptrdiff_t;
-        using value_type            = _ArcDescriptor<isConst>;
+        using value_type            = ArcDescriptorImpl<isConst>;
         using reference             = value_type;
         using pointer               = void;
         using iterator_category     = std::forward_iterator_tag;
         using iterator_concept      = std::forward_iterator_tag;
 
-        _ArcIterator() = default;
-        _ArcIterator(const _ArcIterator&) = default;
-        _ArcIterator& operator = (const _ArcIterator&) = default;
+        ArcIteratorImpl() = default;
+        ArcIteratorImpl(const ArcIteratorImpl&) = default;
+        ArcIteratorImpl& operator = (const ArcIteratorImpl&) = default;
 
-        explicit _ArcIterator(_ConditionalArcLabel it) : _it(it) {}
+        explicit ArcIteratorImpl(ConditionalArcLabel it) : _it(it) {}
 
-        _ArcIterator(const _ArcIterator<false>& other) requires isConst
+        ArcIteratorImpl(const ArcIteratorImpl<false>& other) requires isConst
             : _it(other._it) {}
 
         reference operator*() const { return value_type(_it); }
-        _ArcIterator& operator++() { ++_it; return *this; }
-        _ArcIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
+        ArcIteratorImpl& operator++() { ++_it; return *this; }
+        ArcIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const _ArcIterator& other) const { return _it == other._it; }
-        bool operator!=(const _ArcIterator& other) const { return !(*this == other); }
+        bool operator==(const ArcIteratorImpl& other) const { return _it == other._it; }
+        bool operator!=(const ArcIteratorImpl& other) const { return !(*this == other); }
     };
 
 public:
     // Публичные типы
-    using VertexDescriptor      = _VertexDescriptor<false>;
-    using ConstVertexDescriptor = _VertexDescriptor<true>;
-    using ArcDescriptor         = _ArcDescriptor<false>;
-    using ConstArcDescriptor    = _ArcDescriptor<true>;
+    using VertexDescriptor      = VertexDescriptorImpl<false>;
+    using ConstVertexDescriptor = VertexDescriptorImpl<true>;
+    using ArcDescriptor         = ArcDescriptorImpl<false>;
+    using ConstArcDescriptor    = ArcDescriptorImpl<true>;
 
-    using VertexIterator      = _VertexIterator<false>;
-    using ConstVertexIterator = _VertexIterator<true>;
-    using ArcIterator         = _ArcIterator<false>;
-    using ConstArcIterator    = _ArcIterator<true>;
+    using VertexIterator      = VertexIteratorImpl<false>;
+    using ConstVertexIterator = VertexIteratorImpl<true>;
+    using ArcIterator         = ArcIteratorImpl<false>;
+    using ConstArcIterator    = ArcIteratorImpl<true>;
 
     // ---------- Методы графа ----------
     template<typename... Args>

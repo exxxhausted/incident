@@ -119,12 +119,41 @@ public:
                            T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
+    template<typename T, typename... Args>
+        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData,
+                                          T&& data)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
+    }
+
     template<typename... Args>
         requires (std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.addEdge(from, to); }
 
+    template<typename... Args>
+        requires (std::is_void_v<EdgeData>)
+    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return;
+        return addEdge(*fromOpt, *toOpt);
+    }
+
     void removeEdge(EdgeDescriptor e) { _topology.removeEdge(e); }
+
+    void removeEdge(const VertexData& fromData, const VertexData& toData) {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return;
+        auto edgeOpt = findEdge(*fromOpt, *toOpt);
+        if(edgeOpt) removeEdge(*edgeOpt);
+    }
 
     VertexIterator beginVertices()       { return _topology.beginVertices(); }
     VertexIterator endVertices()         { return _topology.endVertices(); }
@@ -151,20 +180,44 @@ public:
     std::size_t vertexCount() const { return _topology.vertexCount(); }
     std::size_t edgeCount()   const { return _topology.edgeCount(); }
 
-    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.findEdge(from, to); }
+
+    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return _topology.findEdge(from, to); }
+
+    std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.findEdge(*fromOpt, *toOpt);
+    }
+
+    std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.findEdge(*fromOpt, *toOpt);
+    }
 
     bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    bool hasEdge(const VertexData& fromData, const VertexData& toData) const {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return false;
+        return _topology.hasEdge(*fromOpt, *toOpt);
+    }
 
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
 private:
-    struct _EmptyType {};
+    struct EmptyType {};
 
-    using _ConditionalVertexHT = std::conditional_t<std::is_void_v<VertexHash>,
-                                                    _EmptyType,
+    using ConditionalVertexHT = std::conditional_t<std::is_void_v<VertexHash>,
+                                                    EmptyType,
                                                     std::unordered_map<VertexData, VertexDescriptor, VertexHash>>;
 
     void _rebuildIndexes() {
@@ -176,7 +229,7 @@ private:
     }
 
     UndirectedAbstractGraph<VertexData, EdgeData> _topology;
-    [[no_unique_address]] _ConditionalVertexHT _vht;
+    [[no_unique_address]] ConditionalVertexHT _vht;
 };
 
 } // namespace exx::incident
