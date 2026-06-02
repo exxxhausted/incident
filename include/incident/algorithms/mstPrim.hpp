@@ -65,7 +65,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
         if (visited.contains(vDesc)) continue;
         visited.insert(vDesc);
 
-        mst.addEdge(parentDesc.data(), vDesc.data(), weight);
+        mst.addEdge(parentDesc, vDesc, weight);
 
         for (auto edge : vDesc.incidentEdges()) {
             auto otherDesc = edge.otherEnd(vDesc); // always not-nullopt optional
