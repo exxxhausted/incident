@@ -22,7 +22,7 @@ bool hasEdge(const Graph& g, const typename Graph::EdgeData& data) {
 
 TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
     SECTION("Unique vertices with hash (int vertices, void edges)") {
-        UndirectedPseudoGraph<int, void, std::hash<int>, void> g;
+        UndirectedPseudoGraph<int, void, std::hash<int>> g;
 
         // Добавление уникальных вершин
         auto v1 = g.addVertex(10);
@@ -54,53 +54,8 @@ TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
         REQUIRE(g.findVertex(20).has_value());
     }
 
-    SECTION("Unique vertices and edges with hash (int vertices, int edges)") {
-        UndirectedPseudoGraph<int, int, std::hash<int>, std::hash<int>> g;
-
-        // Вершины
-        auto v1 = g.addVertex(1);
-        auto v2 = g.addVertex(2);
-        auto v3 = g.addVertex(3);
-        REQUIRE(v1.has_value());
-        REQUIRE(v2.has_value());
-        REQUIRE(v3.has_value());
-
-        // Добавление рёбер с данными (уникальность рёбер НЕ контролируется, только вершин)
-        auto e1 = g.addEdge(*v1, *v2, 100);
-        auto e2 = g.addEdge(*v2, *v3, 200);
-        auto e3 = g.addEdge(*v1, *v3, 100); // такие же данные, как у e1 – допустимо
-        REQUIRE(g.edgeCount() == 3);
-
-        // findEdge возвращает диапазон (через ranges)
-        auto edges100 = g.findEdge(100);
-        auto it = edges100.begin();
-        REQUIRE(std::distance(edges100.begin(), edges100.end()) == 2);
-
-        // containsEdge
-        REQUIRE(g.containsEdge(100));
-        REQUIRE(g.containsEdge(200));
-        REQUIRE_FALSE(g.containsEdge(999));
-
-        // Удаление одного ребра по дескриптору (должно удалить только e1, не e3)
-        g.removeEdge(e1);
-        REQUIRE(g.edgeCount() == 2);
-        auto edges100_after = g.findEdge(100);
-        REQUIRE(std::distance(edges100_after.begin(), edges100_after.end()) == 1);
-
-        // Проверка findVertex
-        auto found = g.findVertex(2);
-        REQUIRE(found.has_value());
-        REQUIRE(found->data() == 2);
-
-        // Удаление вершины – удаляет все её инцидентные рёбра (e2 и e3)
-        g.removeVertex(*v2);
-        REQUIRE(g.vertexCount() == 2);
-        REQUIRE(g.edgeCount() == 1);
-        REQUIRE_FALSE(g.findVertex(2).has_value());
-    }
-
     SECTION("No hash (linear search) – VertexHash = void, EdgeHash = void") {
-        UndirectedPseudoGraph<std::string, double, void, void> g;
+        UndirectedPseudoGraph<std::string, double, void> g;
 
         auto vA = g.addVertex("A");
         auto vB = g.addVertex("B");
@@ -120,20 +75,9 @@ TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
         g.addEdge(*vB, *vC, 2.5);
         REQUIRE(g.edgeCount() == 2);
 
-        // findEdge использует линейный поиск (возвращает range)
-        auto edges_15 = g.findEdge(1.5);
-        REQUIRE(std::distance(edges_15.begin(), edges_15.end()) == 1);
-        auto edges_99 = g.findEdge(99.0);
-        REQUIRE(edges_99.begin() == edges_99.end());
-
-        // containsEdge
-        REQUIRE(g.containsEdge(1.5));
-        REQUIRE_FALSE(g.containsEdge(0.0));
-
         // Удаление ребра
         g.removeEdge(eAB);
         REQUIRE(g.edgeCount() == 1);
-        REQUIRE_FALSE(g.containsEdge(1.5));
 
         // Удаление вершины
         g.removeVertex(*vB);
@@ -142,7 +86,7 @@ TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
     }
 
     SECTION("EdgeData = void (edges without data)") {
-        UndirectedPseudoGraph<char, void, std::hash<char>, void> g;
+        UndirectedPseudoGraph<char, void, std::hash<char>> g;
 
         auto vX = g.addVertex('X');
         auto vY = g.addVertex('Y');
@@ -166,7 +110,7 @@ TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
     }
 
     SECTION("Copy and move semantics") {
-        using Graph = UndirectedPseudoGraph<int, std::string, std::hash<int>, std::hash<std::string>>;
+        using Graph = UndirectedPseudoGraph<int, std::string, std::hash<int>>;
         Graph original;
         auto v1 = original.addVertex(1);
         auto v2 = original.addVertex(2);
@@ -182,9 +126,6 @@ TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
         REQUIRE(found.has_value());
         // Данные вершины совпадают
         REQUIRE(found->data() == 1);
-        // Поиск ребра по данным
-        auto edges = copy.findEdge("edge12");
-        REQUIRE(std::distance(edges.begin(), edges.end()) == 1);
 
         // Изменение копии не влияет на оригинал
         copy.removeVertex(*found);
@@ -210,16 +151,14 @@ TEST_CASE("UndirectedPseudoGraph comprehensive tests", "[graph][pseudograph]") {
         base.addEdge(v1, v2, 3.14);
 
         // Создаём псевдограф из базового графа
-        UndirectedPseudoGraph<int, double, std::hash<int>, std::hash<double>> g(base);
+        UndirectedPseudoGraph<int, double, std::hash<int>> g(base);
         REQUIRE(g.vertexCount() == 2);
         REQUIRE(g.edgeCount() == 1);
         REQUIRE(g.findVertex(100).has_value());
-        auto edges = g.findEdge(3.14);
-        REQUIRE(std::distance(edges.begin(), edges.end()) == 1);
     }
 
     SECTION("Iterators and ranges") {
-        UndirectedPseudoGraph<int, void, std::hash<int>, void> g;
+        UndirectedPseudoGraph<int, void, std::hash<int>> g;
         for (int i = 0; i < 5; ++i)
             g.addVertex(i);
         // Добавим несколько рёбер (без данных)

@@ -8,153 +8,117 @@ namespace exx::incident {
 
 template<typename VertexData,
          typename EdgeData,
-         typename VertexHash = std::hash<VertexData>,
-         typename EdgeHash = std::hash<EdgeData>>
+         typename VertexHash = std::hash<VertexData>>
 class UndirectedMultiGraph {
 public:
-    // --- Типы, совпадающие с типами псевдографа ---
-    using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::VertexDescriptor;
-    using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstVertexDescriptor;
-    using EdgeDescriptor        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::EdgeDescriptor;
-    using ConstEdgeDescriptor   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstEdgeDescriptor;
 
-    using VertexIterator        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::VertexIterator;
-    using ConstVertexIterator   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstVertexIterator;
-    using EdgeIterator          = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::EdgeIterator;
-    using ConstEdgeIterator     = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>::ConstEdgeIterator;
+    using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
+    using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
+    using EdgeDescriptor        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::EdgeDescriptor;
+    using ConstEdgeDescriptor   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstEdgeDescriptor;
 
-    // --- Конструкторы ---
+    using VertexIterator        = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexIterator;
+    using ConstVertexIterator   = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexIterator;
+    using EdgeIterator          = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::EdgeIterator;
+    using ConstEdgeIterator     = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstEdgeIterator;
+
     UndirectedMultiGraph() = default;
 
-    // Явное преобразование из произвольного абстрактного графа
     explicit UndirectedMultiGraph(const UndirectedAbstractGraph<VertexData, EdgeData>& graph)
-        : _pseudo(graph) {}
+        : _pseudoGraph(graph) {}
 
-    // Копирование и перемещение
     UndirectedMultiGraph(const UndirectedMultiGraph&) = default;
     UndirectedMultiGraph(UndirectedMultiGraph&&) noexcept = default;
 
-    // Присваивание
     UndirectedMultiGraph& operator=(const UndirectedMultiGraph&) = default;
     UndirectedMultiGraph& operator=(UndirectedMultiGraph&&) noexcept = default;
 
-    // Обмен содержимым
-    void swap(UndirectedMultiGraph& other) noexcept {
-        _pseudo.swap(other._pseudo);
-    }
+    void swap(UndirectedMultiGraph& other) noexcept { _pseudoGraph.swap(other._pseudoGraph); }
 
-    // --- Вершины (полностью делегируются) ---
     template<typename... Args>
-    std::optional<VertexDescriptor> emplaceVertex(Args&&... args) {
-        return _pseudo.emplaceVertex(std::forward<Args>(args)...);
-    }
+    std::optional<VertexDescriptor> emplaceVertex(Args&&... args)
+    { return _pseudoGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    std::optional<VertexDescriptor> addVertex(const VertexData& data) {
-        return _pseudo.addVertex(data);
-    }
+    std::optional<VertexDescriptor> addVertex(const VertexData& data)
+    { return _pseudoGraph.addVertex(data); }
 
-    std::optional<VertexDescriptor> addVertex(VertexData&& data) {
-        return _pseudo.addVertex(std::move(data));
-    }
+    std::optional<VertexDescriptor> addVertex(VertexData&& data)
+    { return _pseudoGraph.addVertex(std::move(data)); }
 
-    void removeVertex(VertexDescriptor v) {
-        _pseudo.removeVertex(v);
-    }
+    void removeVertex(VertexDescriptor v)
+    { _pseudoGraph.removeVertex(v); }
 
-    std::optional<VertexDescriptor> findVertex(const VertexData& data) const {
-        return _pseudo.findVertex(data);
-    }
+    std::optional<VertexDescriptor> findVertex(const VertexData& data) const
+    { return _pseudoGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
         requires (!std::is_void_v<VertexHash>)
-    {
-        return _pseudo.containsVertex(data);
-    }
+    { return _pseudoGraph.containsVertex(data); }
 
-    // --- Рёбра с запретом петель ---
     template<typename... Args>
         requires (!std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
+    std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
+                                              VertexDescriptor to,
+                                              Args&&... args)
+    {
         if (from == to) return std::nullopt;
-        return _pseudo.emplaceEdge(from, to, std::forward<Args>(args)...);
+        return _pseudoGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
     template<typename T = EdgeData, typename... Args>
         requires (!std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to, T&& data) {
-        return emplaceEdge(from, to, std::forward<T>(data));
-    }
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
+                                          VertexDescriptor to,
+                                          T&& data)
+    { return emplaceEdge(from, to, std::forward<T>(data)); }
 
     template<typename... Args>
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to) {
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
         if (from == to) return std::nullopt;
-        return _pseudo.addEdge(from, to);
+        return _pseudoGraph.addEdge(from, to);
     }
 
-    void removeEdge(EdgeDescriptor e) {
-        _pseudo.removeEdge(e);
-    }
+    void removeEdge(EdgeDescriptor e) { _pseudoGraph.removeEdge(e); }
 
-    // Поиск рёбер по данным (делегируется)
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    auto findEdge(const T& data) const {
-        return _pseudo.findEdge(data);
-    }
+    VertexIterator beginVertices()             { return _pseudoGraph.beginVertices(); }
+    VertexIterator endVertices()               { return _pseudoGraph.endVertices(); }
+    ConstVertexIterator beginVertices()  const { return _pseudoGraph.beginVertices(); }
+    ConstVertexIterator endVertices()    const { return _pseudoGraph.endVertices(); }
+    ConstVertexIterator cbeginVertices() const { return _pseudoGraph.cbeginVertices(); }
+    ConstVertexIterator cendVertices()   const { return _pseudoGraph.cendVertices(); }
 
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData> && !std::is_void_v<EdgeHash>)
-    bool containsEdge(const T& data) const {
-        return _pseudo.containsEdge(data);
-    }
+    auto vertices()            { return _pseudoGraph.vertices(); }
+    auto vertices()      const { return _pseudoGraph.vertices(); }
+    auto constVertices() const { return _pseudoGraph.constVertices(); }
 
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData> && std::is_void_v<EdgeHash>)
-    bool containsEdge(const T& data) const {
-        return _pseudo.containsEdge(data);
-    }
+    EdgeIterator beginEdges()             { return _pseudoGraph.beginEdges(); }
+    EdgeIterator endEdges()               { return _pseudoGraph.endEdges(); }
+    ConstEdgeIterator beginEdges()  const { return _pseudoGraph.beginEdges(); }
+    ConstEdgeIterator endEdges()    const { return _pseudoGraph.endEdges(); }
+    ConstEdgeIterator cbeginEdges() const { return _pseudoGraph.cbeginEdges(); }
+    ConstEdgeIterator cendEdges()   const { return _pseudoGraph.cendEdges(); }
 
-    // --- Итераторы и обход (делегируются) ---
-    VertexIterator beginVertices()             { return _pseudo.beginVertices(); }
-    VertexIterator endVertices()               { return _pseudo.endVertices(); }
-    ConstVertexIterator beginVertices()  const { return _pseudo.beginVertices(); }
-    ConstVertexIterator endVertices()    const { return _pseudo.endVertices(); }
-    ConstVertexIterator cbeginVertices() const { return _pseudo.cbeginVertices(); }
-    ConstVertexIterator cendVertices()   const { return _pseudo.cendVertices(); }
+    auto edges()            { return _pseudoGraph.edges(); }
+    auto edges()      const { return _pseudoGraph.edges(); }
+    auto constEdges() const { return _pseudoGraph.constEdges(); }
 
-    auto vertices()            { return _pseudo.vertices(); }
-    auto vertices()      const { return _pseudo.vertices(); }
-    auto constVertices() const { return _pseudo.constVertices(); }
-
-    EdgeIterator beginEdges()             { return _pseudo.beginEdges(); }
-    EdgeIterator endEdges()               { return _pseudo.endEdges(); }
-    ConstEdgeIterator beginEdges()  const { return _pseudo.beginEdges(); }
-    ConstEdgeIterator endEdges()    const { return _pseudo.endEdges(); }
-    ConstEdgeIterator cbeginEdges() const { return _pseudo.cbeginEdges(); }
-    ConstEdgeIterator cendEdges()   const { return _pseudo.cendEdges(); }
-
-    auto edges()            { return _pseudo.edges(); }
-    auto edges()      const { return _pseudo.edges(); }
-    auto constEdges() const { return _pseudo.constEdges(); }
-
-    // --- Количество элементов ---
-    std::size_t vertexCount() const { return _pseudo.vertexCount(); }
-    std::size_t edgeCount()   const { return _pseudo.edgeCount(); }
-
+    std::size_t vertexCount() const { return _pseudoGraph.vertexCount(); }
+    std::size_t edgeCount()   const { return _pseudoGraph.edgeCount(); }
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
-    { return _pseudo.findEdge(from, to); }
+    { return _pseudoGraph.findEdge(from, to); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 
-    // --- Доступ к внутреннему псевдографу ---
-    const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash>& basePseudoGraph() const {
-        return _pseudo;
-    }
+    const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
+    { return _pseudoGraph; }
 
 private:
-    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash, EdgeHash> _pseudo;
+
+    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash> _pseudoGraph;
+
 };
 
 } // namespace exx::incident

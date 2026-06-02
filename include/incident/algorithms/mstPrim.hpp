@@ -25,15 +25,14 @@ inline std::string to_string(PrimError e) {
 
 template<typename VertexData,
          typename EdgeData,
-         typename VHash,
-         typename EHash>
+         typename VHash>
 requires (!std::is_void_v<EdgeData> &&
           !std::is_void_v<VHash> &&
           std::is_copy_constructible_v<EdgeData>)
-auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash, EHash>& graph)
-    -> std::expected<UndirectedGraph<VertexData, EdgeData, VHash, EHash>, PrimError>
+auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
+    -> std::expected<UndirectedGraph<VertexData, EdgeData, VHash>, PrimError>
 {
-    using GraphType = UndirectedGraph<VertexData, EdgeData, VHash, EHash>;
+    using GraphType = UndirectedGraph<VertexData, EdgeData, VHash>;
     using VertexDesc = typename GraphType::VertexDescriptor;
     using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
     if (graph.vertexCount() == 0) return GraphType{};

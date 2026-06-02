@@ -41,6 +41,7 @@ make_graph_from_matrix(const MatrixView<EdgeData>& mat, EdgeData noEdgeValue) {
 } // namespace impl
 
 template<typename VertexData, typename EdgeData>
+[[deprecated]]
 UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(std::initializer_list<std::initializer_list<EdgeData>> list, EdgeData noEdgeValue = EdgeData{}) {
     MatrixOwningView<EdgeData> mat(list);
@@ -49,6 +50,7 @@ make_graph_from_matrix(std::initializer_list<std::initializer_list<EdgeData>> li
 }
 
 template<typename VertexData, typename EdgeData>
+[[deprecated]]
 UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(std::vector<std::vector<EdgeData>> vec, EdgeData noEdgeValue = EdgeData{}) {
     MatrixOwningView<EdgeData> mat(vec);
@@ -57,12 +59,14 @@ make_graph_from_matrix(std::vector<std::vector<EdgeData>> vec, EdgeData noEdgeVa
 }
 
 template<typename VertexData, typename EdgeData>
+[[deprecated]]
 UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(const MatrixView<EdgeData>& mat, EdgeData noEdgeValue = EdgeData{}) {
     return impl::make_graph_from_matrix<VertexData, EdgeData>(mat, noEdgeValue);
 }
 
 template<typename VertexData, typename EdgeData, MatrixLike M>
+[[deprecated]]
 UndirectedAbstractGraph<VertexData, EdgeData>
 make_graph_from_matrix(M&& mat, EdgeData noEdgeValue = EdgeData{}) {
     return impl::make_graph_from_matrix<VertexData, EdgeData>(MatrixView<EdgeData>(std::forward<M>(mat)), noEdgeValue);
