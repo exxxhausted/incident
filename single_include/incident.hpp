@@ -2761,7 +2761,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     visited.insert(startDesc);
 
     for (auto edge : startDesc.incidentEdges()) {
-        auto otherDesc = edge.otherEnd(startDesc);
+        auto otherDesc = edge.otherEnd(startDesc); // always not-nullopt optional
         if (!visited.contains(*otherDesc)) pq.push({edge.data(), *otherDesc, startDesc});
     }
 
@@ -2775,7 +2775,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
         mst.addEdge(parentDesc.data(), vDesc.data(), weight);
 
         for (auto edge : vDesc.incidentEdges()) {
-            auto otherDesc = edge.otherEnd(vDesc);
+            auto otherDesc = edge.otherEnd(vDesc); // always not-nullopt optional
             if (!visited.contains(*otherDesc))
                 pq.push({edge.data(), *otherDesc, vDesc});
         }
