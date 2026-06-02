@@ -41,11 +41,37 @@ It is neсessary to use `auto` without any modifyers. For const-access you shoul
 There is no way to precompile difficult template code, so header-only distribution is only possible.  
 You always can include all content of "Incident" immediately by using `single_header/incident.hpp` in your `third_party`
 
-# Core concepts
+## 5. Rust‑style error handling
 
-## Directed and undirected abstract graphs
-The only one type of graph represented now (30.05.26). There is no theoretical rules and restrictions: a great opportunity to be alone with the topology.
-Descriptors is only way you can access your data. Good luck with managing your descriptor collections.
+Operations that can fail (like adding a vertex that already exists, or adding an edge
+when vertices are missing or the graph forbids it) do not throw exceptions.
+Instead they return `std::optional<T>`. You get either a valid descriptor or std::nullopt.
 
-## Thats all content of initial release. Thanks LSTU for providing me motivation to do this. 
-London is the capital of Great Britain
+This forces you to check the result explicitly. No hidden crashes. No try/catch.
+
+# Core Concepts
+
+The library is built around graph theory concepts. Currently only undirected
+graphs are implemented, but the design will be extended to directed graphs.
+
+## Undirected graph 
+Edges have no direction. Edge (u,v) is the same as (v,u).
+
+## Directed graph (work in progress)
+Arcs have a direction: from source to target. Arcs are not symmetric.
+
+## All Graphs may be:
+
+### 1. Abstract
+No restrictions. Do with topology whatever you want.
+
+### 2. Pseudo
+Pseudograph allows loops (edge from a vertex to itself) and multipleedges between the same pair of vertices. No restrictions, except vertex uniqueness
+
+### 3. Multi
+Multigraph allows multiple edges between the same vertices, but forbids loops. This matches the definition from my discrete math course.
+
+### 4. Simple
+Simple graph forbids both loops and multiple edges.
+
+All three share the same interface where possible. There are way to switch between them.
