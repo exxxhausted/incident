@@ -37,12 +37,10 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     if (graph.vertexCount() == 0) return GraphType{};
 
     GraphType mst;
-    std::unordered_map<ConstVertexDesc,
-                       VertexDesc,
-                       typename GraphType::VertexDescriptorHash> newDescOf;
+    std::unordered_map<ConstVertexDesc, VertexDesc> newDescOf;
 
     for (auto v : graph.constVertices()) {
-        VertexDesc newDesc = mst.addVertex(v.data());
+        VertexDesc newDesc = *(mst.addVertex(v.data()));
         newDescOf[v] = newDesc;
     }
 
@@ -58,8 +56,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
                         std::vector<QueueElement>,
                         decltype(cmp)> pq(cmp);
 
-    std::unordered_set<ConstVertexDesc,
-                       typename GraphType::VertexDescriptorHash> visited;
+    std::unordered_set<ConstVertexDesc> visited;
 
     ConstVertexDesc startDesc = *graph.constVertices().begin();
     visited.insert(startDesc);

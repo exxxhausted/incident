@@ -374,6 +374,24 @@ private:
     VertexList _vertices;
     EdgeList   _edges;
 
+    template<bool isConst> class VertexDescriptorImpl;
+    template<bool isConst> class EdgeDescriptorImpl;
+
+public:
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
+private:
+
     template<bool isConst>
     class VertexDescriptorImpl {
     private:
@@ -401,8 +419,15 @@ private:
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
+        auto adjacentVertices() const {
+            return incidentEdges()
+                   | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); });
+        }
+
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+
+        using Hash = VertexDescriptorHash;
     };
 
     template<bool isConst>
@@ -441,6 +466,8 @@ private:
 
         bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
+
+        using Hash = EdgeDescriptorHash;
     };
 
     template<bool isConst>
@@ -515,19 +542,8 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
-    struct VertexDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
-
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
-    struct EdgeDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -667,6 +683,17 @@ public:
 };
 
 } // namespace exx::incident
+
+namespace std {
+
+template<typename T>
+requires requires { typename T::Hash; }
+struct hash<T> {
+   size_t operator()(const T& val) const
+    { return typename T::Hash{}(val); }
+};
+
+} // namespace std
 
 #endif // EXX_UNDIRECTEDABSTRACTGRAPH_HPP
 
@@ -1284,6 +1311,24 @@ private:
     VertexList _vertices;
     EdgeList   _edges;
 
+    template<bool isConst> class VertexDescriptorImpl;
+    template<bool isConst> class EdgeDescriptorImpl;
+
+public:
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
+private:
+
     template<bool isConst>
     class VertexDescriptorImpl {
     private:
@@ -1311,8 +1356,15 @@ private:
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
+        auto adjacentVertices() const {
+            return incidentEdges()
+                   | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); });
+        }
+
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+
+        using Hash = VertexDescriptorHash;
     };
 
     template<bool isConst>
@@ -1351,6 +1403,8 @@ private:
 
         bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
+
+        using Hash = EdgeDescriptorHash;
     };
 
     template<bool isConst>
@@ -1425,19 +1479,8 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
-    struct VertexDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
-
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
-    struct EdgeDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -1577,6 +1620,17 @@ public:
 };
 
 } // namespace exx::incident
+
+namespace std {
+
+template<typename T>
+requires requires { typename T::Hash; }
+struct hash<T> {
+   size_t operator()(const T& val) const
+    { return typename T::Hash{}(val); }
+};
+
+} // namespace std
 
 #endif // EXX_UNDIRECTEDABSTRACTGRAPH_HPP
 
@@ -1871,6 +1925,24 @@ private:
     VertexList _vertices;
     EdgeList   _edges;
 
+    template<bool isConst> class VertexDescriptorImpl;
+    template<bool isConst> class EdgeDescriptorImpl;
+
+public:
+    struct EdgeDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
+    struct VertexDescriptorHash {
+        template<bool isConst>
+        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
+        { return std::hash<const void*>()( &(*desc._label) ); }
+    };
+
+private:
+
     template<bool isConst>
     class VertexDescriptorImpl {
     private:
@@ -1898,8 +1970,15 @@ private:
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
+        auto adjacentVertices() const {
+            return incidentEdges()
+                   | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); });
+        }
+
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+
+        using Hash = VertexDescriptorHash;
     };
 
     template<bool isConst>
@@ -1938,6 +2017,8 @@ private:
 
         bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
+
+        using Hash = EdgeDescriptorHash;
     };
 
     template<bool isConst>
@@ -2012,19 +2093,8 @@ public:
 
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
-    struct VertexDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
-
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
     using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
-    struct EdgeDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
 
     using VertexIterator      = VertexIteratorImpl<false>;
     using ConstVertexIterator = VertexIteratorImpl<true>;
@@ -2164,6 +2234,17 @@ public:
 };
 
 } // namespace exx::incident
+
+namespace std {
+
+template<typename T>
+requires requires { typename T::Hash; }
+struct hash<T> {
+   size_t operator()(const T& val) const
+    { return typename T::Hash{}(val); }
+};
+
+} // namespace std
 
 #endif // EXX_UNDIRECTEDABSTRACTGRAPH_HPP
 
@@ -2744,12 +2825,10 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     if (graph.vertexCount() == 0) return GraphType{};
 
     GraphType mst;
-    std::unordered_map<ConstVertexDesc,
-                       VertexDesc,
-                       typename GraphType::VertexDescriptorHash> newDescOf;
+    std::unordered_map<ConstVertexDesc, VertexDesc> newDescOf;
 
     for (auto v : graph.constVertices()) {
-        VertexDesc newDesc = mst.addVertex(v.data());
+        VertexDesc newDesc = *(mst.addVertex(v.data()));
         newDescOf[v] = newDesc;
     }
 
@@ -2765,8 +2844,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
                         std::vector<QueueElement>,
                         decltype(cmp)> pq(cmp);
 
-    std::unordered_set<ConstVertexDesc,
-                       typename GraphType::VertexDescriptorHash> visited;
+    std::unordered_set<ConstVertexDesc> visited;
 
     ConstVertexDesc startDesc = *graph.constVertices().begin();
     visited.insert(startDesc);

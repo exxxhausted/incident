@@ -54,10 +54,10 @@ This forces you to check the result explicitly. No hidden crashes. No try/catch.
 The library is built around graph theory concepts. Currently only undirected
 graphs are implemented, but the design will be extended to directed graphs.
 
-## Undirected graph 
+### Undirected graph 
 Edges have no direction. Edge (u,v) is the same as (v,u).
 
-## Directed graph (work in progress)
+### Directed graph (work in progress)
 Arcs have a direction: from source to target. Arcs are not symmetric.
 
 ## All Graphs may be:
@@ -74,4 +74,4 @@ Multigraph allows multiple edges between the same vertices, but forbids loops. T
 ### 4. Simple
 Simple graph forbids both loops and multiple edges.
 
-All three share the same interface where possible. There are way to switch between them.
+All three share the same interface where possible. There are ways to switch between them.
