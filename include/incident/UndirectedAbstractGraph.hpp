@@ -5,7 +5,9 @@
 #include <ranges>
 #include <type_traits>
 #include <optional>
+#include <unordered_set>
 #include <unordered_map>
+#include <algorithm>
 
 #include "details/hash_std_injection.hpp" // IWYU pragma: keep
 
@@ -98,14 +100,29 @@ private:
         auto& data()       requires (!isConst) { return _label->_data; }
         const auto& data() const               { return _label->_data; }
 
+        std::size_t degree() const { return _label->_incidentEdges.size(); }
+
         auto incidentEdges() const {
             return std::views::transform(_label->_incidentEdges,
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
-        auto adjacentVertices() const {
-            return incidentEdges()
-                   | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); });
+        std::vector<VertexDescriptorImpl> unorderedAdjV() const { return adjacentVertices<void>(); }
+
+        template<typename Cmp = std::less<VertexData>>
+        std::vector<VertexDescriptorImpl> adjacentVertices() const {
+
+            std::unordered_set<VertexDescriptorImpl> seen;
+            auto uniqueRange = incidentEdges()
+                               | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); })
+                               | std::views::filter([&seen](const VertexDescriptorImpl& v) { return seen.insert(v).second; });
+
+            std::vector<VertexDescriptorImpl> res(uniqueRange.begin(), uniqueRange.end());
+
+            if constexpr(!std::is_void_v<Cmp>)
+                std::ranges::sort(res, [](const auto& a, const auto& b) { return Cmp{}(a.data(), b.data()); });
+
+            return res;
         }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }

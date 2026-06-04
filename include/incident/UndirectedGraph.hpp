@@ -50,7 +50,10 @@ public:
 
     void removeVertex(VertexDescriptor v) { _multiGraph.removeVertex(v); }
 
-    std::optional<VertexDescriptor> findVertex(const VertexData& data) const
+    std::optional<VertexDescriptor> findVertex(const VertexData& data)
+    { return _multiGraph.findVertex(data); }
+
+    std::optional<ConstVertexDescriptor> findVertex(const VertexData& data) const
     { return _multiGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
@@ -149,6 +152,8 @@ public:
     std::size_t vertexCount() const { return _multiGraph.vertexCount(); }
     std::size_t edgeCount()   const { return _multiGraph.edgeCount(); }
 
+    UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph()
+    { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
 

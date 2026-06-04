@@ -51,7 +51,10 @@ public:
     void removeVertex(VertexDescriptor v)
     { _pseudoGraph.removeVertex(v); }
 
-    std::optional<VertexDescriptor> findVertex(const VertexData& data) const
+    std::optional<VertexDescriptor> findVertex(const VertexData& data)
+    { return _pseudoGraph.findVertex(data); }
+
+    std::optional<ConstVertexDescriptor> findVertex(const VertexData& data) const
     { return _pseudoGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
@@ -149,6 +152,8 @@ public:
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.hasEdge(fromData, toData); }
 
+    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph()
+    { return _pseudoGraph; }
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 

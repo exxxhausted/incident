@@ -91,7 +91,20 @@ public:
         _topology.removeVertex(v);
     }
 
-    std::optional<VertexDescriptor> findVertex(const VertexData& data) const {
+    std::optional<VertexDescriptor> findVertex(const VertexData& data) {
+        if constexpr (std::is_void_v<VertexHash>) {
+            for(auto vert : _topology.vertices())
+                if(vert.data() == data) return vert;
+            return std::nullopt;
+        } else {
+            auto it = _vht.find(data);
+            if (it != _vht.end())
+                return it->second;
+            return std::nullopt;
+        }
+    }
+
+    std::optional<ConstVertexDescriptor> findVertex(const VertexData& data) const {
         if constexpr (std::is_void_v<VertexHash>) {
             for(auto vert : _topology.vertices())
                 if(vert.data() == data) return vert;
@@ -213,6 +226,8 @@ public:
         return _topology.hasEdge(*fromOpt, *toOpt);
     }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph()
+    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
