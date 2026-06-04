@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 project(Incident
     VERSION 0.3.0
     LANGUAGES CXX)
 
 add_library(incident INTERFACE)
 target_include_directories(incident INTERFACE include)
-target_compile_features(incident INTERFACE cxx_std_23)
 
 option(BUILD_EXAMPLES "Build examples" ON)
 if(BUILD_EXAMPLES)

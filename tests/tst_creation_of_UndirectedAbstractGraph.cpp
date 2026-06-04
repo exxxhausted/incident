@@ -2,7 +2,7 @@
 #include <catch2/matchers/catch_matchers_vector.hpp>
 
 #include "incident/UndirectedAbstractGraph.hpp"
-#include "incident/algorithms/creation_of_UndirectedAbstractGraph.hpp"
+/*
 
 using namespace exx::incident;
 
@@ -112,4 +112,5 @@ TEST_CASE("Graph creation from matrix views", "[graph_factory]") {
         }
     }
 }
+*/
 

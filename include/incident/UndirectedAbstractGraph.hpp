@@ -7,6 +7,8 @@
 #include <optional>
 #include <unordered_map>
 
+#include "details/hash_std_injection.hpp" // IWYU pragma: keep
+
 namespace exx::incident {
 
 template<typename VertexData, typename EdgeData>
@@ -109,7 +111,7 @@ private:
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
 
-        using Hash = VertexDescriptorHash;
+        using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
     };
 
     template<bool isConst>
@@ -149,7 +151,7 @@ private:
         bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
 
-        using Hash = EdgeDescriptorHash;
+        using CustomHasherProvidedByExxIncident = EdgeDescriptorHash;
     };
 
     template<bool isConst>
@@ -365,16 +367,5 @@ public:
 };
 
 } // namespace exx::incident
-
-namespace std {
-
-template<typename T>
-requires requires { typename T::Hash; }
-struct hash<T> {
-   size_t operator()(const T& val) const
-    { return typename T::Hash{}(val); }
-};
-
-} // namespace std
 
 #endif // EXX_UNDIRECTEDABSTRACTGRAPH_HPP
