@@ -2599,6 +2599,176 @@ auto dfs(Graph& G, typename Graph::VertexDescriptor start)
 
 #endif // EXX::DFSUNDIRECTED_HPP
 
+#ifndef EXX_BFSUNDIRECTED_HPP
+#define EXX_BFSUNDIRECTED_HPP
+
+#include <queue>
+#include <unordered_set>
+
+#ifndef EXX_GRAPHCONCEPTS_HPP
+#define EXX_GRAPHCONCEPTS_HPP
+
+#include <concepts>
+#include <ranges>
+
+namespace exx::incident {
+
+template<typename G>
+concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
+    typename G::VertexValueType;
+    typename G::VertexDescriptor;
+    typename G::ConstVertexDescriptor;
+    typename G::VertexIterator;
+    typename G::ConstVertexIterator;
+
+    { g.beginVertices() } -> std::forward_iterator;
+    { g.endVertices() }   -> std::forward_iterator;
+
+    { cg.beginVertices() } -> std::forward_iterator;
+    { cg.endVertices() }   -> std::forward_iterator;
+
+    { g.vertexCount() } -> std::integral;
+    { cg.vertexCount() } -> std::integral;
+
+    { v.adjacentVertices() } -> std::ranges::forward_range;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
+        typename G::VertexDescriptor
+        >;
+
+    { cv.adjacentVertices() } -> std::ranges::forward_range;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
+        typename G::ConstVertexDescriptor
+        >;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_GRAPHCONCEPTS_HPP
+
+namespace exx::incident {
+
+template<TraversableGraph Graph,
+         typename Cmp = std::less<typename Graph::VertexValueType>>
+auto bfs(Graph& G, typename Graph::VertexDescriptor start)
+    ->std::vector<typename Graph::VertexDescriptor>
+{
+    using Descriptor = typename Graph::VertexDescriptor;
+
+    std::queue<Descriptor> queue;
+    std::unordered_set<Descriptor> visited;
+    std::vector<Descriptor> res;
+
+    queue.push(start);
+    visited.insert(start);
+
+    while(!queue.empty()) {
+        auto current = queue.front();
+        queue.pop();
+
+        res.push_back(current);
+
+        for(auto adjV : current.template adjacentVertices<Cmp>()) {
+            if(!visited.contains(adjV)) {
+                queue.push(adjV);
+                visited.insert(adjV);
+            }
+        }
+    }
+
+    return res;
+}
+
+} // namespace exx::incident
+
+#endif // EXX_BFSUNDIRECTED_HPP
+
+#ifndef EXX_DFSUNDIRECTED_HPP
+#define EXX_DFSUNDIRECTED_HPP
+
+#include <vector>
+#include <stack>
+#include <unordered_set>
+
+#ifndef EXX_GRAPHCONCEPTS_HPP
+#define EXX_GRAPHCONCEPTS_HPP
+
+#include <concepts>
+#include <ranges>
+
+namespace exx::incident {
+
+template<typename G>
+concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
+    typename G::VertexValueType;
+    typename G::VertexDescriptor;
+    typename G::ConstVertexDescriptor;
+    typename G::VertexIterator;
+    typename G::ConstVertexIterator;
+
+    { g.beginVertices() } -> std::forward_iterator;
+    { g.endVertices() }   -> std::forward_iterator;
+
+    { cg.beginVertices() } -> std::forward_iterator;
+    { cg.endVertices() }   -> std::forward_iterator;
+
+    { g.vertexCount() } -> std::integral;
+    { cg.vertexCount() } -> std::integral;
+
+    { v.adjacentVertices() } -> std::ranges::forward_range;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
+        typename G::VertexDescriptor
+        >;
+
+    { cv.adjacentVertices() } -> std::ranges::forward_range;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
+        typename G::ConstVertexDescriptor
+        >;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_GRAPHCONCEPTS_HPP
+
+namespace exx::incident {
+
+template<TraversableGraph Graph,
+         typename Cmp = std::less<typename Graph::VertexValueType>>
+auto dfs(Graph& G, typename Graph::VertexDescriptor start)
+    ->std::vector<typename Graph::VertexDescriptor>
+{
+    using Descriptor = typename Graph::VertexDescriptor;
+
+    std::stack<Descriptor> stack;
+    std::unordered_set<Descriptor> visited;
+    std::vector<Descriptor> res;
+
+    stack.push(start);
+
+    while(!stack.empty()) {
+        auto current = stack.top();
+        stack.pop();
+
+        if(!visited.contains(current)) {
+            visited.insert(current);
+
+            res.push_back(current);
+
+            for(auto adjV : current.template adjacentVertices<Cmp>())
+                if(!visited.contains(adjV)) stack.push(adjV);
+        }
+    }
+
+    return res;
+}
+
+} // namespace exx::incident
+
+#endif // EXX::DFSUNDIRECTED_HPP
+
 #endif // EXX_ALGORITHMS_HPP
 
 #ifndef EXX_IO_HPP
