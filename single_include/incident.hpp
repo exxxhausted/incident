@@ -388,13 +388,15 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-            requires (!std::is_void_v<EdgeData>)
         Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
-            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
-
-        Edge(VertexLabel v1, VertexLabel v2)
-            requires (std::is_void_v<EdgeData>)
-            : _v1(v1), _v2(v2) {}
+            : _v1(v1), _v2(v2)
+        {
+            if constexpr (!std::is_void_v<EdgeData>)
+                _data = ConditionalEdgeData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "EdgeData is void, cannot pass data to edge");
+        }
     };
 
     struct Vertex {
@@ -588,6 +590,9 @@ private:
 
 public:
 
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
+
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
@@ -647,17 +652,43 @@ public:
     }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor emplaceEdge(VertexDescriptor from,
-                               VertexDescriptor to,
-                               Args&&... args)
-    {
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
         _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
         auto it = std::prev(_edges.end());
+
+        struct Rollback {
+            EdgeList& edges;
+            EdgeLabel it;
+            VertexLabel v1, v2;
+            bool v1_done = false;
+            bool v2_done = false;
+            bool committed = false;
+
+            Rollback(EdgeList& edges, EdgeLabel it, VertexLabel v1, VertexLabel v2)
+                : edges(edges), it(it), v1(v1), v2(v2) {}
+
+            ~Rollback() {
+                if (committed) return;
+                if (v2_done) v2->_incidentEdges.pop_back();
+                if (v1_done) v1->_incidentEdges.pop_back();
+                edges.erase(it);
+            }
+
+            void commit() { committed = true; }
+
+        } rollback(_edges, it, from._label, to._label);
+
         from._label->_incidentEdges.push_back(it);
+        rollback.v1_done = true;
+
         to._label->_incidentEdges.push_back(it);
+        rollback.v2_done = true;
+
         it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+
+        rollback.commit();
+
         return EdgeDescriptor(it);
     }
 
@@ -668,15 +699,7 @@ public:
 
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    {
-        _edges.emplace_back(from._label, to._label);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
+    { return emplaceEdge(from, to); }
 
     void removeEdge(EdgeDescriptor edge) {
         edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
@@ -721,14 +744,21 @@ public:
         return std::nullopt;
     }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    void clear() {
+        _edges.clear();
+        _vertices.clear();
+    }
+
+    bool empty() const { return _vertices.empty(); }
 };
 
 } // namespace exx::incident
@@ -742,6 +772,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedPseudoGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
@@ -845,49 +878,54 @@ public:
         }
     }
 
-    bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
-    { return _vht.contains(data); }
+    bool containsVertex(const VertexData& data) const {
+        if constexpr (std::is_void_v<VertexHash>)
+            for(auto vert : _topology.vertices()) {
+                if(vert.data() == data) return true;
+            }
+        else
+            return _vht.contains(data);
+    }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor emplaceEdge(VertexDescriptor from,
                                VertexDescriptor to,
                                Args&&... args)
-    { return _topology.addEdge(from, to, std::forward<Args>(args)...); }
+    { return _topology.emplaceEdge(from, to, std::forward<Args>(args)...); }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdgeData(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.emplaceEdge(*fromOpt, *toOpt, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from,
                            VertexDescriptor to,
                            T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdgeData(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
-        requires (std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
-    { return _topology.addEdge(from, to); }
-
-    template<typename... Args>
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(from, to); }
+
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData)
+        requires (std::is_void_v<EdgeData>)
+    {  return emplaceEdgeData(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _topology.removeEdge(e); }
 
@@ -927,7 +965,7 @@ public:
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.findEdge(from, to); }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _topology.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) {
@@ -944,7 +982,7 @@ public:
         return _topology.findEdge(*fromOpt, *toOpt);
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const {
@@ -954,15 +992,19 @@ public:
         return _topology.hasEdge(*fromOpt, *toOpt);
     }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _topology; }
+
+    void clear() {
+        _topology.clear();
+        if constexpr (!std::is_void_v<VertexHash>)
+            _vht.clear();
+    }
+
+    bool empty() const { return _topology.empty(); }
 
 private:
     struct EmptyType {};
@@ -994,6 +1036,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedMultiGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -1041,11 +1086,9 @@ public:
     { return _pseudoGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _pseudoGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
@@ -1054,40 +1097,36 @@ public:
         return _pseudoGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if(fromData == toData) return std::nullopt;
+        return _pseudoGraph.emplaceEdgeData(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        return _pseudoGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _pseudoGraph.removeEdge(e); }
 
@@ -1121,7 +1160,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _pseudoGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _pseudoGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -1129,21 +1168,21 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.hasEdge(fromData, toData); }
 
-    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph()
-    { return _pseudoGraph; }
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _pseudoGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _pseudoGraph.topology(); }
+
+    void clear() { _pseudoGraph.clear(); }
+
+    bool empty() const { return _pseudoGraph.empty(); }
 
 private:
 
@@ -1162,6 +1201,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -1208,54 +1250,49 @@ public:
     { return _multiGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _multiGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if (fromData == toData) return std::nullopt;
+        if (_multiGraph.hasEdge(fromData, toData)) return std::nullopt;
+        return _multiGraph.emplaceEdge(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
     {
+        if (from == to) return std::nullopt;
         if (_multiGraph.hasEdge(from, to)) return std::nullopt;
         return _multiGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        if (_multiGraph.hasEdge(from, to)) return std::nullopt;
-        return _multiGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _multiGraph.removeEdge(e); }
 
@@ -1264,7 +1301,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _multiGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -1272,7 +1309,7 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _multiGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.hasEdge(from, to); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
@@ -1303,15 +1340,15 @@ public:
     std::size_t vertexCount() const { return _multiGraph.vertexCount(); }
     std::size_t edgeCount()   const { return _multiGraph.edgeCount(); }
 
-    UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph()
-    { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _multiGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _multiGraph.topology(); }
+
+    void clear() { _multiGraph.clear(); }
+
+    bool empty() const { return _multiGraph.empty(); }
 
 private:
 
@@ -1420,13 +1457,15 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-            requires (!std::is_void_v<EdgeData>)
         Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
-            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
-
-        Edge(VertexLabel v1, VertexLabel v2)
-            requires (std::is_void_v<EdgeData>)
-            : _v1(v1), _v2(v2) {}
+            : _v1(v1), _v2(v2)
+        {
+            if constexpr (!std::is_void_v<EdgeData>)
+                _data = ConditionalEdgeData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "EdgeData is void, cannot pass data to edge");
+        }
     };
 
     struct Vertex {
@@ -1620,6 +1659,9 @@ private:
 
 public:
 
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
+
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
@@ -1679,17 +1721,43 @@ public:
     }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor emplaceEdge(VertexDescriptor from,
-                               VertexDescriptor to,
-                               Args&&... args)
-    {
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
         _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
         auto it = std::prev(_edges.end());
+
+        struct Rollback {
+            EdgeList& edges;
+            EdgeLabel it;
+            VertexLabel v1, v2;
+            bool v1_done = false;
+            bool v2_done = false;
+            bool committed = false;
+
+            Rollback(EdgeList& edges, EdgeLabel it, VertexLabel v1, VertexLabel v2)
+                : edges(edges), it(it), v1(v1), v2(v2) {}
+
+            ~Rollback() {
+                if (committed) return;
+                if (v2_done) v2->_incidentEdges.pop_back();
+                if (v1_done) v1->_incidentEdges.pop_back();
+                edges.erase(it);
+            }
+
+            void commit() { committed = true; }
+
+        } rollback(_edges, it, from._label, to._label);
+
         from._label->_incidentEdges.push_back(it);
+        rollback.v1_done = true;
+
         to._label->_incidentEdges.push_back(it);
+        rollback.v2_done = true;
+
         it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+
+        rollback.commit();
+
         return EdgeDescriptor(it);
     }
 
@@ -1700,15 +1768,7 @@ public:
 
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    {
-        _edges.emplace_back(from._label, to._label);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
+    { return emplaceEdge(from, to); }
 
     void removeEdge(EdgeDescriptor edge) {
         edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
@@ -1753,14 +1813,21 @@ public:
         return std::nullopt;
     }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    void clear() {
+        _edges.clear();
+        _vertices.clear();
+    }
+
+    bool empty() const { return _vertices.empty(); }
 };
 
 } // namespace exx::incident
@@ -1774,6 +1841,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedPseudoGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
@@ -1877,49 +1947,54 @@ public:
         }
     }
 
-    bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
-    { return _vht.contains(data); }
+    bool containsVertex(const VertexData& data) const {
+        if constexpr (std::is_void_v<VertexHash>)
+            for(auto vert : _topology.vertices()) {
+                if(vert.data() == data) return true;
+            }
+        else
+            return _vht.contains(data);
+    }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor emplaceEdge(VertexDescriptor from,
                                VertexDescriptor to,
                                Args&&... args)
-    { return _topology.addEdge(from, to, std::forward<Args>(args)...); }
+    { return _topology.emplaceEdge(from, to, std::forward<Args>(args)...); }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdgeData(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.emplaceEdge(*fromOpt, *toOpt, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from,
                            VertexDescriptor to,
                            T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdgeData(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
-        requires (std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
-    { return _topology.addEdge(from, to); }
-
-    template<typename... Args>
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(from, to); }
+
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData)
+        requires (std::is_void_v<EdgeData>)
+    {  return emplaceEdgeData(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _topology.removeEdge(e); }
 
@@ -1959,7 +2034,7 @@ public:
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.findEdge(from, to); }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _topology.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) {
@@ -1976,7 +2051,7 @@ public:
         return _topology.findEdge(*fromOpt, *toOpt);
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const {
@@ -1986,15 +2061,19 @@ public:
         return _topology.hasEdge(*fromOpt, *toOpt);
     }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _topology; }
+
+    void clear() {
+        _topology.clear();
+        if constexpr (!std::is_void_v<VertexHash>)
+            _vht.clear();
+    }
+
+    bool empty() const { return _topology.empty(); }
 
 private:
     struct EmptyType {};
@@ -2026,6 +2105,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedMultiGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -2073,11 +2155,9 @@ public:
     { return _pseudoGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _pseudoGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
@@ -2086,40 +2166,36 @@ public:
         return _pseudoGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if(fromData == toData) return std::nullopt;
+        return _pseudoGraph.emplaceEdgeData(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        return _pseudoGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _pseudoGraph.removeEdge(e); }
 
@@ -2153,7 +2229,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _pseudoGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _pseudoGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -2161,21 +2237,21 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.hasEdge(fromData, toData); }
 
-    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph()
-    { return _pseudoGraph; }
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _pseudoGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _pseudoGraph.topology(); }
+
+    void clear() { _pseudoGraph.clear(); }
+
+    bool empty() const { return _pseudoGraph.empty(); }
 
 private:
 
@@ -2194,6 +2270,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -2240,54 +2319,49 @@ public:
     { return _multiGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _multiGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if (fromData == toData) return std::nullopt;
+        if (_multiGraph.hasEdge(fromData, toData)) return std::nullopt;
+        return _multiGraph.emplaceEdge(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
     {
+        if (from == to) return std::nullopt;
         if (_multiGraph.hasEdge(from, to)) return std::nullopt;
         return _multiGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        if (_multiGraph.hasEdge(from, to)) return std::nullopt;
-        return _multiGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _multiGraph.removeEdge(e); }
 
@@ -2296,7 +2370,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _multiGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -2304,7 +2378,7 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _multiGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.hasEdge(from, to); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
@@ -2335,15 +2409,15 @@ public:
     std::size_t vertexCount() const { return _multiGraph.vertexCount(); }
     std::size_t edgeCount()   const { return _multiGraph.edgeCount(); }
 
-    UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph()
-    { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _multiGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _multiGraph.topology(); }
+
+    void clear() { _multiGraph.clear(); }
+
+    bool empty() const { return _multiGraph.empty(); }
 
 private:
 
@@ -2443,436 +2517,60 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
 #ifndef EXX_DFSUNDIRECTED_HPP
 #define EXX_DFSUNDIRECTED_HPP
 
+#include <vector>
 #include <stack>
 #include <unordered_set>
 
-#ifndef EXX_UNDIRECTEDABSTRACTGRAPH_HPP
-#define EXX_UNDIRECTEDABSTRACTGRAPH_HPP
+#ifndef EXX_GRAPHCONCEPTS_HPP
+#define EXX_GRAPHCONCEPTS_HPP
 
-#include <list>
+#include <concepts>
 #include <ranges>
-#include <type_traits>
-#include <optional>
-#include <unordered_set>
-#include <unordered_map>
-#include <algorithm>
-
-#ifndef EXX_HASHSTDINJECTION_HPP
-#define EXX_HASHSTDINJECTION_HPP
-
-#include <functional>
 
 namespace exx::incident {
 
-template<typename T>
-concept HashableByExxIncident =
-    requires(const T& v) {
-        typename T::CustomHasherProvidedByExxIncident;
-
-        { typename T::CustomHasherProvidedByExxIncident{}(v) }
-              -> std::convertible_to<std::size_t>;
-    };
-
-} // namespace exx::incident
-
-namespace std {
-
-template<typename T>
-    requires exx::incident::HashableByExxIncident<T>
-struct hash<T> {
-    std::size_t operator()(const T& val) const
-    { return typename T::CustomHasherProvidedByExxIncident{}(val); }
-};
-
-} // namespace std
-
-#endif // EXX_HASHSTDINJECTION_HPP
-
-namespace exx::incident {
-
-template<typename VertexData, typename EdgeData>
-class UndirectedAbstractGraph {
-private:
-    struct Vertex;
-    struct Edge;
-
-    using VertexList       = std::list<Vertex>;
-    using EdgeList         = std::list<Edge>;
-    using VertexLabel      = typename VertexList::iterator;
-    using VertexConstLabel = typename VertexList::const_iterator;
-    using EdgeLabel        = typename EdgeList::iterator;
-    using EdgeConstLabel   = typename EdgeList::const_iterator;
-
-    struct EmptyEdgeData final {};
-    using ConditionalEdgeData = std::conditional_t<std::is_void_v<EdgeData>, EmptyEdgeData, EdgeData>;
-
-    struct EraseAccelerationMetaData {
-        typename std::list<EdgeLabel>::iterator _posInV1{};
-        typename std::list<EdgeLabel>::iterator _posInV2{};
-    };
-
-    struct Edge {
-        VertexLabel _v1;
-        VertexLabel _v2;
-        [[no_unique_address]] ConditionalEdgeData _data;
-        EraseAccelerationMetaData _meta{};
-
-        template<typename... Args>
-            requires (!std::is_void_v<EdgeData>)
-        Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
-            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
-
-        Edge(VertexLabel v1, VertexLabel v2)
-            requires (std::is_void_v<EdgeData>)
-            : _v1(v1), _v2(v2) {}
-    };
-
-    struct Vertex {
-        std::list<EdgeLabel> _incidentEdges;
-        VertexData _data;
-        template<typename... Args>
-        explicit Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
-    };
-
-    VertexList _vertices;
-    EdgeList   _edges;
-
-    template<bool isConst> class VertexDescriptorImpl;
-    template<bool isConst> class EdgeDescriptorImpl;
-
-public:
-    struct EdgeDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
-
-    struct VertexDescriptorHash {
-        template<bool isConst>
-        std::size_t operator()(const VertexDescriptorImpl<isConst>& desc) const
-        { return std::hash<const void*>()( &(*desc._label) ); }
-    };
-
-private:
-
-    template<bool isConst>
-    class VertexDescriptorImpl {
-    private:
-        using ConditionalVertexLabel = std::conditional_t<isConst, VertexConstLabel, VertexLabel>;
-
-        ConditionalVertexLabel _label;
-
-        friend class UndirectedAbstractGraph;
-
-    public:
-        VertexDescriptorImpl() = default;
-        VertexDescriptorImpl(const VertexDescriptorImpl&) = default;
-        VertexDescriptorImpl& operator=(const VertexDescriptorImpl&) = default;
-
-        explicit VertexDescriptorImpl(ConditionalVertexLabel label) : _label(label) {}
-
-        VertexDescriptorImpl(const VertexDescriptorImpl<false>& other) requires isConst
-            : _label(other._label) {}
-
-        auto& data()       requires (!isConst) { return _label->_data; }
-        const auto& data() const               { return _label->_data; }
-
-        std::size_t degree() const { return _label->_incidentEdges.size(); }
-
-        auto incidentEdges() const {
-            return std::views::transform(_label->_incidentEdges,
-                                         [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
-        }
-
-        std::vector<VertexDescriptorImpl> unorderedAdjV() const { return adjacentVertices<void>(); }
-
-        template<typename Cmp = std::less<VertexData>>
-        std::vector<VertexDescriptorImpl> adjacentVertices() const {
-
-            std::unordered_set<VertexDescriptorImpl> seen;
-            auto uniqueRange = incidentEdges()
-                               | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); })
-                               | std::views::filter([&seen](const VertexDescriptorImpl& v) { return seen.insert(v).second; });
-
-            std::vector<VertexDescriptorImpl> res(uniqueRange.begin(), uniqueRange.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b) { return Cmp{}(a.data(), b.data()); });
-
-            return res;
-        }
-
-        bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
-
-        using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
-    };
-
-    template<bool isConst>
-    class EdgeDescriptorImpl {
-    private:
-        using ConditionalEdgeLabel = std::conditional_t<isConst, EdgeConstLabel, EdgeLabel>;
-
-        ConditionalEdgeLabel _label;
-
-        friend class UndirectedAbstractGraph;
-
-    public:
-        EdgeDescriptorImpl() = default;
-        EdgeDescriptorImpl(const EdgeDescriptorImpl&) = default;
-        EdgeDescriptorImpl& operator=(const EdgeDescriptorImpl&) = default;
-
-        explicit EdgeDescriptorImpl(ConditionalEdgeLabel label) : _label(label) {}
-
-        EdgeDescriptorImpl(const EdgeDescriptorImpl<false>& other) requires isConst
-            : _label(other._label) {}
-
-        auto& data()       requires (!std::is_void_v<EdgeData> && !isConst) { return _label->_data; }
-        const auto& data() const requires (!std::is_void_v<EdgeData>) { return _label->_data; }
-
-        VertexDescriptorImpl<isConst> v1() const { return VertexDescriptorImpl<isConst>(_label->_v1); }
-        VertexDescriptorImpl<isConst> v2() const { return VertexDescriptorImpl<isConst>(_label->_v2); }
-
-        std::optional<VertexDescriptorImpl<isConst>> otherEnd(const VertexDescriptorImpl<isConst>& vertex) const {
-            if (vertex._label == _label->_v1)
-                return VertexDescriptorImpl<isConst>(_label->_v2);
-            else if (vertex._label == _label->_v2)
-                return VertexDescriptorImpl<isConst>(_label->_v1);
-            else
-                return std::nullopt;
-        }
-
-        bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
-
-        using CustomHasherProvidedByExxIncident = EdgeDescriptorHash;
-    };
-
-    template<bool isConst>
-    class VertexIteratorImpl {
-    private:
-        using ConditionalVertexLabel = std::conditional_t<isConst, VertexConstLabel, VertexLabel>;
-
-        ConditionalVertexLabel _it;
-
-        friend class UndirectedAbstractGraph;
-
-    public:
-        using difference_type       = std::ptrdiff_t;
-        using value_type            = VertexDescriptorImpl<isConst>;
-        using reference             = value_type;
-        using pointer               = void;
-        using iterator_category     = std::forward_iterator_tag;
-        using iterator_concept      = std::forward_iterator_tag;
-
-        VertexIteratorImpl() = default;
-        VertexIteratorImpl(const VertexIteratorImpl&) = default;
-        VertexIteratorImpl& operator=(const VertexIteratorImpl&) = default;
-
-        explicit VertexIteratorImpl(ConditionalVertexLabel it) : _it(it) {}
-
-        VertexIteratorImpl(const VertexIteratorImpl<false>& other) requires isConst
-            : _it(other._it) {}
-
-        reference operator*() const { return value_type(_it); }
-        VertexIteratorImpl& operator++() { ++_it; return *this; }
-        VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
-
-        bool operator==(const VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const VertexIteratorImpl& other) const { return !(*this == other); }
-    };
-
-    template<bool isConst>
-    class EdgeIteratorImpl {
-    private:
-        using ConditionalEdgeLabel = std::conditional_t<isConst, EdgeConstLabel, EdgeLabel>;
-
-        ConditionalEdgeLabel _it;
-
-        friend class UndirectedAbstractGraph;
-
-    public:
-        using difference_type       = std::ptrdiff_t;
-        using value_type            = EdgeDescriptorImpl<isConst>;
-        using reference             = value_type;
-        using pointer               = void;
-        using iterator_category     = std::forward_iterator_tag;
-        using iterator_concept      = std::forward_iterator_tag;
-
-        EdgeIteratorImpl() = default;
-        EdgeIteratorImpl(const EdgeIteratorImpl&) = default;
-        EdgeIteratorImpl& operator=(const EdgeIteratorImpl&) = default;
-
-        explicit EdgeIteratorImpl(ConditionalEdgeLabel it) : _it(it) {}
-
-        EdgeIteratorImpl(const EdgeIteratorImpl<false>& other) requires isConst
-            : _it(other._it) {}
-
-        reference operator*() const { return value_type(_it); }
-        EdgeIteratorImpl& operator++() { ++_it; return *this; }
-        EdgeIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
-
-        bool operator==(const EdgeIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const EdgeIteratorImpl& other) const { return !(*this == other); }
-    };
-
-public:
-
-    using VertexDescriptor      = VertexDescriptorImpl<false>;
-    using ConstVertexDescriptor = VertexDescriptorImpl<true>;
-    using EdgeDescriptor        = EdgeDescriptorImpl<false>;
-    using ConstEdgeDescriptor   = EdgeDescriptorImpl<true>;
-
-    using VertexIterator      = VertexIteratorImpl<false>;
-    using ConstVertexIterator = VertexIteratorImpl<true>;
-    using EdgeIterator        = EdgeIteratorImpl<false>;
-    using ConstEdgeIterator   = EdgeIteratorImpl<true>;
-
-    UndirectedAbstractGraph() = default;
-
-    UndirectedAbstractGraph(const UndirectedAbstractGraph& other) {
-        std::unordered_map<const Vertex*, VertexDescriptor> origToNew;
-
-        for (const auto& origVertex : other._vertices) {
-            VertexDescriptor newV = emplaceVertex(origVertex._data);
-            origToNew[&origVertex] = newV;
-        }
-
-        for (const auto& origEdge : other._edges) {
-            VertexDescriptor newV1 = origToNew[&(*origEdge._v1)];
-            VertexDescriptor newV2 = origToNew[&(*origEdge._v2)];
-
-            if constexpr (std::is_void_v<EdgeData>) addEdge(newV1, newV2);
-            else addEdge(newV1, newV2, origEdge._data);
-        }
-    }
-
-    UndirectedAbstractGraph(UndirectedAbstractGraph&&) noexcept = default;
-
-    UndirectedAbstractGraph& operator=(const UndirectedAbstractGraph& other) {
-        if (this != &other) {
-            UndirectedAbstractGraph temp(other);
-            *this = std::move(temp);
-        }
-        return *this;
-    }
-
-    UndirectedAbstractGraph& operator=(UndirectedAbstractGraph&&) noexcept = default;
-
-    template<typename... Args>
-    VertexDescriptor emplaceVertex(Args&&... args) {
-        _vertices.emplace_back(std::forward<Args>(args)...);
-        auto it = std::prev(_vertices.end());
-        return VertexDescriptor(it);
-    }
-
-    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
-    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
-
-    void removeVertex(VertexDescriptor vertex) {
-        auto incidentCopy = vertex._label->_incidentEdges;
-        for (auto edgeLabel : incidentCopy)
-            removeEdge(EdgeDescriptor(edgeLabel));
-        _vertices.erase(vertex._label);
-    }
-
-    template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor emplaceEdge(VertexDescriptor from,
-                               VertexDescriptor to,
-                               Args&&... args)
-    {
-        _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
-
-    template<typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to, T&& data)
-    { return emplaceEdge(from, to, std::forward<T>(data)); }
-
-    EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
-        requires (std::is_void_v<EdgeData>)
-    {
-        _edges.emplace_back(from._label, to._label);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
-
-    void removeEdge(EdgeDescriptor edge) {
-        edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
-        edge._label->_v2->_incidentEdges.erase(edge._label->_meta._posInV2);
-        _edges.erase(edge._label);
-    }
-
-    VertexIterator beginVertices()             { return VertexIterator(_vertices.begin()); }
-    VertexIterator endVertices()               { return VertexIterator(_vertices.end()); }
-    ConstVertexIterator beginVertices()  const { return ConstVertexIterator(_vertices.begin()); }
-    ConstVertexIterator endVertices()    const { return ConstVertexIterator(_vertices.end()); }
-    ConstVertexIterator cbeginVertices() const { return ConstVertexIterator(_vertices.begin()); }
-    ConstVertexIterator cendVertices()   const { return ConstVertexIterator(_vertices.end()); }
-
-    auto vertices()
-    { return std::ranges::subrange<VertexIterator, VertexIterator>(beginVertices(), endVertices()); }
-    auto vertices() const
-    { return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(beginVertices(), endVertices()); }
-    auto constVertices() const
-    { return std::ranges::subrange<ConstVertexIterator, ConstVertexIterator>(cbeginVertices(), cendVertices()); }
-
-    EdgeIterator beginEdges()             { return EdgeIterator(_edges.begin()); }
-    EdgeIterator endEdges()               { return EdgeIterator(_edges.end()); }
-    ConstEdgeIterator beginEdges()  const { return ConstEdgeIterator(_edges.begin()); }
-    ConstEdgeIterator endEdges()    const { return ConstEdgeIterator(_edges.end()); }
-    ConstEdgeIterator cbeginEdges() const { return ConstEdgeIterator(_edges.begin()); }
-    ConstEdgeIterator cendEdges()   const { return ConstEdgeIterator(_edges.end()); }
-
-    auto edges()
-    { return std::ranges::subrange<EdgeIterator, EdgeIterator>(beginEdges(), endEdges()); }
-    auto edges() const
-    { return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(beginEdges(), endEdges()); }
-    auto constEdges() const
-    { return std::ranges::subrange<ConstEdgeIterator, ConstEdgeIterator>(cbeginEdges(), cendEdges()); }
-
-    std::size_t vertexCount() const { return _vertices.size(); }
-    std::size_t edgeCount()   const { return _edges.size(); }
-
-    std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
-        for (auto e : from.incidentEdges())
-            if (*e.otherEnd(from) == to) return e;
-        return std::nullopt;
-    }
-
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
-        for (auto e : from.incidentEdges())
-            if (*e.otherEnd(from) == to) return e;
-        return std::nullopt;
-    }
-
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
-    { return findEdge(from, to).has_value(); }
+template<typename G>
+concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
+    typename G::VertexValueType;
+    typename G::VertexDescriptor;
+    typename G::ConstVertexDescriptor;
+    typename G::VertexIterator;
+    typename G::ConstVertexIterator;
+
+    { g.beginVertices() } -> std::forward_iterator;
+    { g.endVertices() }   -> std::forward_iterator;
+
+    { cg.beginVertices() } -> std::forward_iterator;
+    { cg.endVertices() }   -> std::forward_iterator;
+
+    { g.vertexCount() } -> std::integral;
+    { cg.vertexCount() } -> std::integral;
+
+    { v.adjacentVertices() } -> std::ranges::forward_range;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
+        typename G::VertexDescriptor
+        >;
+
+    { cv.adjacentVertices() } -> std::ranges::forward_range;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
+        typename G::ConstVertexDescriptor
+        >;
 };
 
 } // namespace exx::incident
 
-#endif // EXX_UNDIRECTEDABSTRACTGRAPH_HPP
+#endif // EXX_GRAPHCONCEPTS_HPP
 
 namespace exx::incident {
 
-template<typename VD, typename ED, typename Cmp = std::less<VD>>
-auto dfs(UndirectedAbstractGraph<VD, ED>& G,
-         typename UndirectedAbstractGraph<VD, ED>::VertexDescriptor start)
-    ->std::vector<typename UndirectedAbstractGraph<VD, ED>::VertexDescriptor>
+template<TraversableGraph Graph,
+         typename Cmp = std::less<typename Graph::VertexValueType>>
+auto dfs(Graph& G, typename Graph::VertexDescriptor start)
+    ->std::vector<typename Graph::VertexDescriptor>
 {
-    using Descriptor = typename UndirectedAbstractGraph<VD, ED>::VertexDescriptor;
+    using Descriptor = typename Graph::VertexDescriptor;
 
     std::stack<Descriptor> stack;
     std::unordered_set<Descriptor> visited;
@@ -2995,13 +2693,15 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-            requires (!std::is_void_v<EdgeData>)
         Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
-            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
-
-        Edge(VertexLabel v1, VertexLabel v2)
-            requires (std::is_void_v<EdgeData>)
-            : _v1(v1), _v2(v2) {}
+            : _v1(v1), _v2(v2)
+        {
+            if constexpr (!std::is_void_v<EdgeData>)
+                _data = ConditionalEdgeData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "EdgeData is void, cannot pass data to edge");
+        }
     };
 
     struct Vertex {
@@ -3195,6 +2895,9 @@ private:
 
 public:
 
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
+
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
@@ -3254,17 +2957,43 @@ public:
     }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor emplaceEdge(VertexDescriptor from,
-                               VertexDescriptor to,
-                               Args&&... args)
-    {
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
         _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
         auto it = std::prev(_edges.end());
+
+        struct Rollback {
+            EdgeList& edges;
+            EdgeLabel it;
+            VertexLabel v1, v2;
+            bool v1_done = false;
+            bool v2_done = false;
+            bool committed = false;
+
+            Rollback(EdgeList& edges, EdgeLabel it, VertexLabel v1, VertexLabel v2)
+                : edges(edges), it(it), v1(v1), v2(v2) {}
+
+            ~Rollback() {
+                if (committed) return;
+                if (v2_done) v2->_incidentEdges.pop_back();
+                if (v1_done) v1->_incidentEdges.pop_back();
+                edges.erase(it);
+            }
+
+            void commit() { committed = true; }
+
+        } rollback(_edges, it, from._label, to._label);
+
         from._label->_incidentEdges.push_back(it);
+        rollback.v1_done = true;
+
         to._label->_incidentEdges.push_back(it);
+        rollback.v2_done = true;
+
         it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+
+        rollback.commit();
+
         return EdgeDescriptor(it);
     }
 
@@ -3275,15 +3004,7 @@ public:
 
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    {
-        _edges.emplace_back(from._label, to._label);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
+    { return emplaceEdge(from, to); }
 
     void removeEdge(EdgeDescriptor edge) {
         edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
@@ -3328,14 +3049,21 @@ public:
         return std::nullopt;
     }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    void clear() {
+        _edges.clear();
+        _vertices.clear();
+    }
+
+    bool empty() const { return _vertices.empty(); }
 };
 
 } // namespace exx::incident
@@ -3349,6 +3077,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedPseudoGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
@@ -3452,49 +3183,54 @@ public:
         }
     }
 
-    bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
-    { return _vht.contains(data); }
+    bool containsVertex(const VertexData& data) const {
+        if constexpr (std::is_void_v<VertexHash>)
+            for(auto vert : _topology.vertices()) {
+                if(vert.data() == data) return true;
+            }
+        else
+            return _vht.contains(data);
+    }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor emplaceEdge(VertexDescriptor from,
                                VertexDescriptor to,
                                Args&&... args)
-    { return _topology.addEdge(from, to, std::forward<Args>(args)...); }
+    { return _topology.emplaceEdge(from, to, std::forward<Args>(args)...); }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdgeData(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.emplaceEdge(*fromOpt, *toOpt, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from,
                            VertexDescriptor to,
                            T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdgeData(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
-        requires (std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
-    { return _topology.addEdge(from, to); }
-
-    template<typename... Args>
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(from, to); }
+
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData)
+        requires (std::is_void_v<EdgeData>)
+    {  return emplaceEdgeData(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _topology.removeEdge(e); }
 
@@ -3534,7 +3270,7 @@ public:
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.findEdge(from, to); }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _topology.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) {
@@ -3551,7 +3287,7 @@ public:
         return _topology.findEdge(*fromOpt, *toOpt);
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const {
@@ -3561,15 +3297,19 @@ public:
         return _topology.hasEdge(*fromOpt, *toOpt);
     }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _topology; }
+
+    void clear() {
+        _topology.clear();
+        if constexpr (!std::is_void_v<VertexHash>)
+            _vht.clear();
+    }
+
+    bool empty() const { return _topology.empty(); }
 
 private:
     struct EmptyType {};
@@ -3601,6 +3341,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedMultiGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -3648,11 +3391,9 @@ public:
     { return _pseudoGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _pseudoGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
@@ -3661,40 +3402,36 @@ public:
         return _pseudoGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if(fromData == toData) return std::nullopt;
+        return _pseudoGraph.emplaceEdgeData(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        return _pseudoGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _pseudoGraph.removeEdge(e); }
 
@@ -3728,7 +3465,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _pseudoGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _pseudoGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -3736,21 +3473,21 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.hasEdge(fromData, toData); }
 
-    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph()
-    { return _pseudoGraph; }
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _pseudoGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _pseudoGraph.topology(); }
+
+    void clear() { _pseudoGraph.clear(); }
+
+    bool empty() const { return _pseudoGraph.empty(); }
 
 private:
 
@@ -3769,6 +3506,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -3815,54 +3555,49 @@ public:
     { return _multiGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _multiGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if (fromData == toData) return std::nullopt;
+        if (_multiGraph.hasEdge(fromData, toData)) return std::nullopt;
+        return _multiGraph.emplaceEdge(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
     {
+        if (from == to) return std::nullopt;
         if (_multiGraph.hasEdge(from, to)) return std::nullopt;
         return _multiGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        if (_multiGraph.hasEdge(from, to)) return std::nullopt;
-        return _multiGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _multiGraph.removeEdge(e); }
 
@@ -3871,7 +3606,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _multiGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -3879,7 +3614,7 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _multiGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.hasEdge(from, to); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
@@ -3910,15 +3645,15 @@ public:
     std::size_t vertexCount() const { return _multiGraph.vertexCount(); }
     std::size_t edgeCount()   const { return _multiGraph.edgeCount(); }
 
-    UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph()
-    { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _multiGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _multiGraph.topology(); }
+
+    void clear() { _multiGraph.clear(); }
+
+    bool empty() const { return _multiGraph.empty(); }
 
 private:
 
@@ -4121,13 +3856,15 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-            requires (!std::is_void_v<EdgeData>)
         Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
-            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
-
-        Edge(VertexLabel v1, VertexLabel v2)
-            requires (std::is_void_v<EdgeData>)
-            : _v1(v1), _v2(v2) {}
+            : _v1(v1), _v2(v2)
+        {
+            if constexpr (!std::is_void_v<EdgeData>)
+                _data = ConditionalEdgeData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "EdgeData is void, cannot pass data to edge");
+        }
     };
 
     struct Vertex {
@@ -4321,6 +4058,9 @@ private:
 
 public:
 
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
+
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
@@ -4380,17 +4120,43 @@ public:
     }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor emplaceEdge(VertexDescriptor from,
-                               VertexDescriptor to,
-                               Args&&... args)
-    {
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
         _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
         auto it = std::prev(_edges.end());
+
+        struct Rollback {
+            EdgeList& edges;
+            EdgeLabel it;
+            VertexLabel v1, v2;
+            bool v1_done = false;
+            bool v2_done = false;
+            bool committed = false;
+
+            Rollback(EdgeList& edges, EdgeLabel it, VertexLabel v1, VertexLabel v2)
+                : edges(edges), it(it), v1(v1), v2(v2) {}
+
+            ~Rollback() {
+                if (committed) return;
+                if (v2_done) v2->_incidentEdges.pop_back();
+                if (v1_done) v1->_incidentEdges.pop_back();
+                edges.erase(it);
+            }
+
+            void commit() { committed = true; }
+
+        } rollback(_edges, it, from._label, to._label);
+
         from._label->_incidentEdges.push_back(it);
+        rollback.v1_done = true;
+
         to._label->_incidentEdges.push_back(it);
+        rollback.v2_done = true;
+
         it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+
+        rollback.commit();
+
         return EdgeDescriptor(it);
     }
 
@@ -4401,15 +4167,7 @@ public:
 
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    {
-        _edges.emplace_back(from._label, to._label);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
+    { return emplaceEdge(from, to); }
 
     void removeEdge(EdgeDescriptor edge) {
         edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
@@ -4454,14 +4212,21 @@ public:
         return std::nullopt;
     }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    void clear() {
+        _edges.clear();
+        _vertices.clear();
+    }
+
+    bool empty() const { return _vertices.empty(); }
 };
 
 } // namespace exx::incident
@@ -4475,6 +4240,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedPseudoGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
@@ -4578,49 +4346,54 @@ public:
         }
     }
 
-    bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
-    { return _vht.contains(data); }
+    bool containsVertex(const VertexData& data) const {
+        if constexpr (std::is_void_v<VertexHash>)
+            for(auto vert : _topology.vertices()) {
+                if(vert.data() == data) return true;
+            }
+        else
+            return _vht.contains(data);
+    }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor emplaceEdge(VertexDescriptor from,
                                VertexDescriptor to,
                                Args&&... args)
-    { return _topology.addEdge(from, to, std::forward<Args>(args)...); }
+    { return _topology.emplaceEdge(from, to, std::forward<Args>(args)...); }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdgeData(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.emplaceEdge(*fromOpt, *toOpt, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from,
                            VertexDescriptor to,
                            T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdgeData(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
-        requires (std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
-    { return _topology.addEdge(from, to); }
-
-    template<typename... Args>
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(from, to); }
+
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData)
+        requires (std::is_void_v<EdgeData>)
+    {  return emplaceEdgeData(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _topology.removeEdge(e); }
 
@@ -4660,7 +4433,7 @@ public:
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.findEdge(from, to); }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _topology.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) {
@@ -4677,7 +4450,7 @@ public:
         return _topology.findEdge(*fromOpt, *toOpt);
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const {
@@ -4687,15 +4460,19 @@ public:
         return _topology.hasEdge(*fromOpt, *toOpt);
     }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _topology; }
+
+    void clear() {
+        _topology.clear();
+        if constexpr (!std::is_void_v<VertexHash>)
+            _vht.clear();
+    }
+
+    bool empty() const { return _topology.empty(); }
 
 private:
     struct EmptyType {};
@@ -4727,6 +4504,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedMultiGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -4774,11 +4554,9 @@ public:
     { return _pseudoGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _pseudoGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
@@ -4787,40 +4565,36 @@ public:
         return _pseudoGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if(fromData == toData) return std::nullopt;
+        return _pseudoGraph.emplaceEdgeData(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        return _pseudoGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _pseudoGraph.removeEdge(e); }
 
@@ -4854,7 +4628,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _pseudoGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _pseudoGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -4862,21 +4636,21 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
     { return _pseudoGraph.hasEdge(fromData, toData); }
 
-    UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph()
-    { return _pseudoGraph; }
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _pseudoGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _pseudoGraph.topology(); }
+
+    void clear() { _pseudoGraph.clear(); }
+
+    bool empty() const { return _pseudoGraph.empty(); }
 
 private:
 
@@ -4895,6 +4669,9 @@ template<typename VertexData,
          typename VertexHash = std::hash<VertexData>>
 class UndirectedGraph {
 public:
+
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
 
     using VertexDescriptor      = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedMultiGraph<VertexData, EdgeData, VertexHash>::ConstVertexDescriptor;
@@ -4941,54 +4718,49 @@ public:
     { return _multiGraph.findVertex(data); }
 
     bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
     { return _multiGraph.containsVertex(data); }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
+    std::optional<EdgeDescriptor> emplaceEdge(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        if (fromData == toData) return std::nullopt;
+        if (_multiGraph.hasEdge(fromData, toData)) return std::nullopt;
+        return _multiGraph.emplaceEdge(fromData, toData, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
     std::optional<EdgeDescriptor> emplaceEdge(VertexDescriptor from,
                                               VertexDescriptor to,
                                               Args&&... args)
     {
+        if (from == to) return std::nullopt;
         if (_multiGraph.hasEdge(from, to)) return std::nullopt;
         return _multiGraph.emplaceEdge(from, to, std::forward<Args>(args)...);
     }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(VertexDescriptor from,
                                           VertexDescriptor to,
                                           T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdge(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(VertexDescriptor from, VertexDescriptor to) {
-        if (from == to) return std::nullopt;
-        if (_multiGraph.hasEdge(from, to)) return std::nullopt;
-        return _multiGraph.addEdge(from, to);
-    }
+    { return emplaceEdge(from, to); }
 
-    template<typename... Args>
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData)
         requires (std::is_void_v<EdgeData>)
-    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _multiGraph.removeEdge(e); }
 
@@ -4997,7 +4769,7 @@ public:
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _multiGraph.findEdge(from, to); }
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData)
@@ -5005,7 +4777,7 @@ public:
     std::optional<ConstEdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) const
     { return _multiGraph.findEdge(fromData, toData); }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _multiGraph.hasEdge(from, to); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const
@@ -5036,15 +4808,15 @@ public:
     std::size_t vertexCount() const { return _multiGraph.vertexCount(); }
     std::size_t edgeCount()   const { return _multiGraph.edgeCount(); }
 
-    UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph()
-    { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _multiGraph.topology(); }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _multiGraph.topology(); }
+
+    void clear() { _multiGraph.clear(); }
+
+    bool empty() const { return _multiGraph.empty(); }
 
 private:
 

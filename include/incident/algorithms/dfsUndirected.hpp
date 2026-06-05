@@ -1,19 +1,20 @@
 #ifndef EXX_DFSUNDIRECTED_HPP
 #define EXX_DFSUNDIRECTED_HPP
 
+#include <vector>
 #include <stack>
 #include <unordered_set>
 
-#include "../UndirectedAbstractGraph.hpp"
+#include "../graph_concepts.hpp"
 
 namespace exx::incident {
 
-template<typename VD, typename ED, typename Cmp = std::less<VD>>
-auto dfs(UndirectedAbstractGraph<VD, ED>& G,
-         typename UndirectedAbstractGraph<VD, ED>::VertexDescriptor start)
-    ->std::vector<typename UndirectedAbstractGraph<VD, ED>::VertexDescriptor>
+template<TraversableGraph Graph,
+         typename Cmp = std::less<typename Graph::VertexValueType>>
+auto dfs(Graph& G, typename Graph::VertexDescriptor start)
+    ->std::vector<typename Graph::VertexDescriptor>
 {
-    using Descriptor = typename UndirectedAbstractGraph<VD, ED>::VertexDescriptor;
+    using Descriptor = typename Graph::VertexDescriptor;
 
     std::stack<Descriptor> stack;
     std::unordered_set<Descriptor> visited;

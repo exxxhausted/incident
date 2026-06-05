@@ -26,7 +26,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto start = G.findVertex(0);
         REQUIRE(start);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
 
         REQUIRE(ids == std::vector<std::size_t>{0});
@@ -39,7 +39,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(0);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
 
         // Единственный возможный порядок: 0, затем 1
@@ -57,7 +57,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(0);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
 
         // DFS вдоль цепи: 0 -> 1 -> 2
@@ -75,7 +75,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(1);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
         REQUIRE(ids == std::vector<std::size_t>{1, 2, 0});
     }
@@ -93,7 +93,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(0);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
         REQUIRE(ids == std::vector<std::size_t>{0, 3, 2, 1});
     }
@@ -105,7 +105,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(0);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
 
         REQUIRE(ids == std::vector<std::size_t>{0, 1});
@@ -118,7 +118,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(0);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
 
         // Кратные рёбра не меняют порядок: 0,1.
@@ -138,7 +138,7 @@ TEST_CASE("DFS order on undirected graph", "[dfs][order]") {
         auto& G = *graphExpected;
         auto start = G.findVertex(0);
 
-        auto result = dfs(G.topology(), *start);
+        auto result = dfs(G, *start);
         auto ids = toIds(result);
 
         REQUIRE(ids == std::vector<std::size_t>{0, 1});

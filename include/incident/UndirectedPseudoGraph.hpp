@@ -14,6 +14,9 @@ template<typename VertexData,
 class UndirectedPseudoGraph {
 public:
 
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
+
     using VertexDescriptor      = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptor;
     using ConstVertexDescriptor = typename UndirectedAbstractGraph<VertexData, EdgeData>::ConstVertexDescriptor;
     using VertexDescriptorHash  = typename UndirectedAbstractGraph<VertexData, EdgeData>::VertexDescriptorHash;
@@ -117,49 +120,54 @@ public:
         }
     }
 
-    bool containsVertex(const VertexData& data) const
-        requires (!std::is_void_v<VertexHash>)
-    { return _vht.contains(data); }
+    bool containsVertex(const VertexData& data) const {
+        if constexpr (std::is_void_v<VertexHash>)
+            for(auto vert : _topology.vertices()) {
+                if(vert.data() == data) return true;
+            }
+        else
+            return _vht.contains(data);
+    }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor emplaceEdge(VertexDescriptor from,
                                VertexDescriptor to,
                                Args&&... args)
-    { return _topology.addEdge(from, to, std::forward<Args>(args)...); }
+    { return _topology.emplaceEdge(from, to, std::forward<Args>(args)...); }
 
-    template<typename T = EdgeData, typename... Args>
+    template<typename... Args>
+    std::optional<EdgeDescriptor> emplaceEdgeData(const VertexData& fromData,
+                                              const VertexData& toData,
+                                              Args&&... args)
+    {
+        auto fromOpt = findVertex(fromData);
+        auto toOpt = findVertex(toData);
+        if(!fromOpt || ! toOpt) return std::nullopt;
+        return _topology.emplaceEdge(*fromOpt, *toOpt, std::forward<Args>(args)...);
+    }
+
+    template<typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from,
                            VertexDescriptor to,
                            T&& data)
     { return emplaceEdge(from, to, std::forward<T>(data)); }
 
-    template<typename T, typename... Args>
+    template<typename T>
         requires (!std::is_void_v<EdgeData>)
     std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
                                           const VertexData& toData,
                                           T&& data)
-    {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return std::nullopt;
-        return addEdge(*fromOpt, *toOpt, std::forward<T>(data));
-    }
+    { return emplaceEdgeData(fromData, toData, std::forward<T>(data)); }
 
-    template<typename... Args>
-        requires (std::is_void_v<EdgeData>)
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
-    { return _topology.addEdge(from, to); }
-
-    template<typename... Args>
         requires (std::is_void_v<EdgeData>)
-    EdgeDescriptor addEdge(const VertexData& fromData, const VertexData& toData) {
-        auto fromOpt = findVertex(fromData);
-        auto toOpt = findVertex(toData);
-        if(!fromOpt || ! toOpt) return;
-        return addEdge(*fromOpt, *toOpt);
-    }
+    { return emplaceEdge(from, to); }
+
+    std::optional<EdgeDescriptor> addEdge(const VertexData& fromData,
+                                          const VertexData& toData)
+        requires (std::is_void_v<EdgeData>)
+    {  return emplaceEdgeData(fromData, toData); }
 
     void removeEdge(EdgeDescriptor e) { _topology.removeEdge(e); }
 
@@ -199,7 +207,7 @@ public:
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to)
     { return _topology.findEdge(from, to); }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return _topology.findEdge(from, to); }
 
     std::optional<EdgeDescriptor> findEdge(const VertexData& fromData, const VertexData& toData) {
@@ -216,7 +224,7 @@ public:
         return _topology.findEdge(*fromOpt, *toOpt);
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
 
     bool hasEdge(const VertexData& fromData, const VertexData& toData) const {
@@ -226,15 +234,19 @@ public:
         return _topology.hasEdge(*fromOpt, *toOpt);
     }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
-    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
-    { return _topology; }
     const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
     { return _topology; }
+
+    void clear() {
+        _topology.clear();
+        if constexpr (!std::is_void_v<VertexHash>)
+            _vht.clear();
+    }
+
+    bool empty() const { return _topology.empty(); }
 
 private:
     struct EmptyType {};

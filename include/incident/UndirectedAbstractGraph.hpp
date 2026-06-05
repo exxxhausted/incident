@@ -41,13 +41,15 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-            requires (!std::is_void_v<EdgeData>)
         Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
-            : _v1(v1), _v2(v2), _data(std::forward<Args>(args)...) {}
-
-        Edge(VertexLabel v1, VertexLabel v2)
-            requires (std::is_void_v<EdgeData>)
-            : _v1(v1), _v2(v2) {}
+            : _v1(v1), _v2(v2)
+        {
+            if constexpr (!std::is_void_v<EdgeData>)
+                _data = ConditionalEdgeData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "EdgeData is void, cannot pass data to edge");
+        }
     };
 
     struct Vertex {
@@ -241,6 +243,9 @@ private:
 
 public:
 
+    using VertexValueType = VertexData;
+    using EdgeValueType   = EdgeData;
+
     using VertexDescriptor      = VertexDescriptorImpl<false>;
     using ConstVertexDescriptor = VertexDescriptorImpl<true>;
     using EdgeDescriptor        = EdgeDescriptorImpl<false>;
@@ -300,17 +305,43 @@ public:
     }
 
     template<typename... Args>
-        requires (!std::is_void_v<EdgeData>)
-    EdgeDescriptor emplaceEdge(VertexDescriptor from,
-                               VertexDescriptor to,
-                               Args&&... args)
-    {
+    EdgeDescriptor emplaceEdge(VertexDescriptor from, VertexDescriptor to, Args&&... args) {
         _edges.emplace_back(from._label, to._label, std::forward<Args>(args)...);
         auto it = std::prev(_edges.end());
+
+        struct Rollback {
+            EdgeList& edges;
+            EdgeLabel it;
+            VertexLabel v1, v2;
+            bool v1_done = false;
+            bool v2_done = false;
+            bool committed = false;
+
+            Rollback(EdgeList& edges, EdgeLabel it, VertexLabel v1, VertexLabel v2)
+                : edges(edges), it(it), v1(v1), v2(v2) {}
+
+            ~Rollback() {
+                if (committed) return;
+                if (v2_done) v2->_incidentEdges.pop_back();
+                if (v1_done) v1->_incidentEdges.pop_back();
+                edges.erase(it);
+            }
+
+            void commit() { committed = true; }
+
+        } rollback(_edges, it, from._label, to._label);
+
         from._label->_incidentEdges.push_back(it);
+        rollback.v1_done = true;
+
         to._label->_incidentEdges.push_back(it);
+        rollback.v2_done = true;
+
         it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+
+        rollback.commit();
+
         return EdgeDescriptor(it);
     }
 
@@ -321,15 +352,7 @@ public:
 
     EdgeDescriptor addEdge(VertexDescriptor from, VertexDescriptor to)
         requires (std::is_void_v<EdgeData>)
-    {
-        _edges.emplace_back(from._label, to._label);
-        auto it = std::prev(_edges.end());
-        from._label->_incidentEdges.push_back(it);
-        to._label->_incidentEdges.push_back(it);
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
-        it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
-        return EdgeDescriptor(it);
-    }
+    { return emplaceEdge(from, to); }
 
     void removeEdge(EdgeDescriptor edge) {
         edge._label->_v1->_incidentEdges.erase(edge._label->_meta._posInV1);
@@ -374,14 +397,21 @@ public:
         return std::nullopt;
     }
 
-    std::optional<ConstEdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) const {
+    std::optional<ConstEdgeDescriptor> findEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    bool hasEdge(ConstVertexDescriptor from, ConstVertexDescriptor to) const
     { return findEdge(from, to).has_value(); }
+
+    void clear() {
+        _edges.clear();
+        _vertices.clear();
+    }
+
+    bool empty() const { return _vertices.empty(); }
 };
 
 } // namespace exx::incident
