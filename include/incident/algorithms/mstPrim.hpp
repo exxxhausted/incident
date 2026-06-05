@@ -16,10 +16,9 @@ enum class PrimError {
 
 inline std::string to_string(PrimError e) {
     switch (e) {
-    case PrimError::DisconnectedGraph:
-        return "Граф не является связным";
+    case PrimError::DisconnectedGraph: return "Graph is disconnected.";
+    default:                           return "Неизвестная ошибка";
     }
-    return "Неизвестная ошибка";
 }
 
 template<typename VertexData,

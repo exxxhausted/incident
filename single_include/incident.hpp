@@ -2437,10 +2437,9 @@ enum class PrimError {
 
 inline std::string to_string(PrimError e) {
     switch (e) {
-    case PrimError::DisconnectedGraph:
-        return "Граф не является связным";
+    case PrimError::DisconnectedGraph: return "Graph is disconnected.";
+    default:                           return "Неизвестная ошибка";
     }
-    return "Неизвестная ошибка";
 }
 
 template<typename VertexData,
@@ -2513,91 +2512,6 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
 } // namespace exx::incident
 
 #endif // EXX_MSTPRIM_HPP
-
-#ifndef EXX_DFSUNDIRECTED_HPP
-#define EXX_DFSUNDIRECTED_HPP
-
-#include <vector>
-#include <stack>
-#include <unordered_set>
-
-#ifndef EXX_GRAPHCONCEPTS_HPP
-#define EXX_GRAPHCONCEPTS_HPP
-
-#include <concepts>
-#include <ranges>
-
-namespace exx::incident {
-
-template<typename G>
-concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
-    typename G::VertexValueType;
-    typename G::VertexDescriptor;
-    typename G::ConstVertexDescriptor;
-    typename G::VertexIterator;
-    typename G::ConstVertexIterator;
-
-    { g.beginVertices() } -> std::forward_iterator;
-    { g.endVertices() }   -> std::forward_iterator;
-
-    { cg.beginVertices() } -> std::forward_iterator;
-    { cg.endVertices() }   -> std::forward_iterator;
-
-    { g.vertexCount() } -> std::integral;
-    { cg.vertexCount() } -> std::integral;
-
-    { v.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
-        typename G::VertexDescriptor
-        >;
-
-    { cv.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
-        typename G::ConstVertexDescriptor
-        >;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_GRAPHCONCEPTS_HPP
-
-namespace exx::incident {
-
-template<TraversableGraph Graph,
-         typename Cmp = std::less<typename Graph::VertexValueType>>
-auto dfs(Graph& G, typename Graph::VertexDescriptor start)
-    ->std::vector<typename Graph::VertexDescriptor>
-{
-    using Descriptor = typename Graph::VertexDescriptor;
-
-    std::stack<Descriptor> stack;
-    std::unordered_set<Descriptor> visited;
-    std::vector<Descriptor> res;
-
-    stack.push(start);
-
-    while(!stack.empty()) {
-        auto current = stack.top();
-        stack.pop();
-
-        if(!visited.contains(current)) {
-            visited.insert(current);
-
-            res.push_back(current);
-
-            for(auto adjV : current.template adjacentVertices<Cmp>())
-                if(!visited.contains(adjV)) stack.push(adjV);
-        }
-    }
-
-    return res;
-}
-
-} // namespace exx::incident
-
-#endif // EXX::DFSUNDIRECTED_HPP
 
 #ifndef EXX_BFSUNDIRECTED_HPP
 #define EXX_BFSUNDIRECTED_HPP
@@ -3842,17 +3756,15 @@ namespace exx::incident {
 enum class GraphBuildingError {
     NullPointer,
     ZeroSize,
-    NonSquareMatrix,
-    InconsistentRowSize
+    NonSquareMatrix
 };
 
-std::string to_string(GraphBuildingError error) noexcept {
+inline std::string to_string(GraphBuildingError error) noexcept {
     using enum GraphBuildingError;
     switch (error) {
-    case NullPointer:          return "NullPointer: input matrix pointer is null";
-    case ZeroSize:             return "ZeroSize: matrix size is zero";
-    case NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
-    case InconsistentRowSize:  return "InconsistentRowSize: rows have different sizes";
+    case GraphBuildingError::NullPointer:          return "NullPointer: input matrix pointer is null";
+    case GraphBuildingError::ZeroSize:             return "ZeroSize: matrix size is zero";
+    case GraphBuildingError::NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
     default:                   return "Unknown error";
     }
 }
@@ -3861,7 +3773,6 @@ template<typename EdgeData>
 auto buildUndirectedGraph(const EdgeData* matrix, std::size_t n)
     ->std::expected<UndirectedGraph<std::size_t, EdgeData>, GraphBuildingError>
 {
-
     if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
@@ -3897,10 +3808,9 @@ auto buildUndirectedGraph(const std::vector<std::vector<EdgeData>>& matrix)
     return buildUndirectedGraph<EdgeData>(flat.data(), n);
 }
 
-auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)\
+inline auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)
     ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
 {
-
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
     UndirectedGraph<std::size_t, void> g;
@@ -3917,7 +3827,7 @@ auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)\
     return g;
 }
 
-auto buildUndirectedGraph(const std::vector<std::vector<bool>>& matrix)
+inline auto buildUndirectedGraph(const std::vector<std::vector<bool>>& matrix)
     ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
 {
     if (matrix.empty())
@@ -5018,8 +4928,20 @@ public:
 
     const T* data() const { return _storage.data(); }
 
-    T& operator()(std::size_t i, std::size_t j) { return _storage[i * _cols + j]; }
-    const T& operator()(std::size_t i, std::size_t j) const { return _storage[i * _cols + j]; }
+    T& operator()(std::size_t i, std::size_t j)
+        requires (!std::is_same_v<T, bool>)
+    { return _storage[i * _cols + j]; }
+    const T& operator()(std::size_t i, std::size_t j) const
+        requires (!std::is_same_v<T, bool>)
+    { return _storage[i * _cols + j]; }
+
+    bool operator()(std::size_t i, std::size_t j) const
+        requires (std::is_same_v<T, bool>)
+    { return _storage[i * _cols + j]; }
+
+    void set(std::size_t i, std::size_t j, bool v)
+        requires (std::is_same_v<T, bool>)
+    { _storage[i * _cols + j] = v; }
 
 private:
     std::size_t _rows, _cols;
@@ -5039,13 +4961,14 @@ Matrix<bool> toAdjacencyMatrix(const UndirectedGraph<VertexData, void>& g) {
 
     for (std::size_t i = 0; i < n; ++i)
         for (std::size_t j = 0; j < n; ++j)
-            mat(i, j) = false;
+            mat.set(i, j, false);
 
     for (auto v : g.vertices()) {
         for (auto e : v.incidentEdges()) {
             auto u = *e.otherEnd(v);
-            mat(v.data(), u.data()) = true;
-            mat(u.data(), v.data()) = true;
+
+            mat.set(v.data(), u.data(), true);
+            mat.set(u.data(), v.data(), true);
         }
     }
     return mat;

@@ -10,17 +10,15 @@ namespace exx::incident {
 enum class GraphBuildingError {
     NullPointer,
     ZeroSize,
-    NonSquareMatrix,
-    InconsistentRowSize
+    NonSquareMatrix
 };
 
-std::string to_string(GraphBuildingError error) noexcept {
+inline std::string to_string(GraphBuildingError error) noexcept {
     using enum GraphBuildingError;
     switch (error) {
-    case NullPointer:          return "NullPointer: input matrix pointer is null";
-    case ZeroSize:             return "ZeroSize: matrix size is zero";
-    case NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
-    case InconsistentRowSize:  return "InconsistentRowSize: rows have different sizes";
+    case GraphBuildingError::NullPointer:          return "NullPointer: input matrix pointer is null";
+    case GraphBuildingError::ZeroSize:             return "ZeroSize: matrix size is zero";
+    case GraphBuildingError::NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
     default:                   return "Unknown error";
     }
 }
@@ -29,7 +27,6 @@ template<typename EdgeData>
 auto buildUndirectedGraph(const EdgeData* matrix, std::size_t n)
     ->std::expected<UndirectedGraph<std::size_t, EdgeData>, GraphBuildingError>
 {
-
     if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
@@ -65,10 +62,9 @@ auto buildUndirectedGraph(const std::vector<std::vector<EdgeData>>& matrix)
     return buildUndirectedGraph<EdgeData>(flat.data(), n);
 }
 
-auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)\
+inline auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)
     ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
 {
-
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
     UndirectedGraph<std::size_t, void> g;
@@ -85,7 +81,7 @@ auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)\
     return g;
 }
 
-auto buildUndirectedGraph(const std::vector<std::vector<bool>>& matrix)
+inline auto buildUndirectedGraph(const std::vector<std::vector<bool>>& matrix)
     ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
 {
     if (matrix.empty())
