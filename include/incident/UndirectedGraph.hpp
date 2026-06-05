@@ -157,6 +157,11 @@ public:
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _multiGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _multiGraph.topology(); }
+
 private:
 
     UndirectedMultiGraph<VertexData, EdgeData, VertexHash> _multiGraph;

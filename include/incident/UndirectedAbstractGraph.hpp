@@ -380,7 +380,8 @@ public:
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident

@@ -157,6 +157,11 @@ public:
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _pseudoGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _pseudoGraph.topology(); }
+
 private:
 
     UndirectedPseudoGraph<VertexData, EdgeData, VertexHash> _pseudoGraph;

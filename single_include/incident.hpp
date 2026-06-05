@@ -727,7 +727,8 @@ public:
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -958,6 +959,11 @@ public:
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _topology; }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _topology; }
+
 private:
     struct EmptyType {};
 
@@ -1134,6 +1140,11 @@ public:
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _pseudoGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _pseudoGraph.topology(); }
+
 private:
 
     UndirectedPseudoGraph<VertexData, EdgeData, VertexHash> _pseudoGraph;
@@ -1296,6 +1307,11 @@ public:
     { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
+
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _multiGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _multiGraph.topology(); }
 
 private:
 
@@ -1743,7 +1759,8 @@ public:
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -1974,6 +1991,11 @@ public:
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _topology; }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _topology; }
+
 private:
     struct EmptyType {};
 
@@ -2150,6 +2172,11 @@ public:
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _pseudoGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _pseudoGraph.topology(); }
+
 private:
 
     UndirectedPseudoGraph<VertexData, EdgeData, VertexHash> _pseudoGraph;
@@ -2312,6 +2339,11 @@ public:
     { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
+
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _multiGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _multiGraph.topology(); }
 
 private:
 
@@ -2825,7 +2857,8 @@ public:
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -3301,7 +3334,8 @@ public:
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -3532,6 +3566,11 @@ public:
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _topology; }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _topology; }
+
 private:
     struct EmptyType {};
 
@@ -3708,6 +3747,11 @@ public:
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _pseudoGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _pseudoGraph.topology(); }
+
 private:
 
     UndirectedPseudoGraph<VertexData, EdgeData, VertexHash> _pseudoGraph;
@@ -3870,6 +3914,11 @@ public:
     { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
+
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _multiGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _multiGraph.topology(); }
 
 private:
 
@@ -4411,7 +4460,8 @@ public:
         return std::nullopt;
     }
 
-    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const { return findEdge(from, to).has_value(); }
+    bool hasEdge(VertexDescriptor from, VertexDescriptor to) const
+    { return findEdge(from, to).has_value(); }
 };
 
 } // namespace exx::incident
@@ -4642,6 +4692,11 @@ public:
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _topology; }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _topology; }
+
 private:
     struct EmptyType {};
 
@@ -4818,6 +4873,11 @@ public:
     const UndirectedPseudoGraph<VertexData, EdgeData, VertexHash>& basePseudoGraph() const
     { return _pseudoGraph; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _pseudoGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _pseudoGraph.topology(); }
+
 private:
 
     UndirectedPseudoGraph<VertexData, EdgeData, VertexHash> _pseudoGraph;
@@ -4980,6 +5040,11 @@ public:
     { return _multiGraph; }
     const UndirectedMultiGraph<VertexData, EdgeData, VertexHash>& baseMultiGraph() const
     { return _multiGraph; }
+
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _multiGraph.topology(); }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _multiGraph.topology(); }
 
 private:
 

@@ -231,6 +231,11 @@ public:
     const UndirectedAbstractGraph<VertexData, EdgeData>& baseAbstractGraph() const
     { return _topology; }
 
+    UndirectedAbstractGraph<VertexData, EdgeData>& topology()
+    { return _topology; }
+    const UndirectedAbstractGraph<VertexData, EdgeData>& topology() const
+    { return _topology; }
+
 private:
     struct EmptyType {};
 
