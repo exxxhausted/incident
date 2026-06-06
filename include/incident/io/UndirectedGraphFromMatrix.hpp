@@ -19,7 +19,7 @@ inline std::string to_string(GraphBuildingError error) noexcept {
     case GraphBuildingError::NullPointer:          return "NullPointer: input matrix pointer is null";
     case GraphBuildingError::ZeroSize:             return "ZeroSize: matrix size is zero";
     case GraphBuildingError::NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
-    default:                   return "Unknown error";
+    default:                                       return "Unknown error";
     }
 }
 

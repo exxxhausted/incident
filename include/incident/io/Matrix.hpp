@@ -18,20 +18,11 @@ public:
 
     const T* data() const { return _storage.data(); }
 
-    T& operator()(std::size_t i, std::size_t j)
-        requires (!std::is_same_v<T, bool>)
-    { return _storage[i * _cols + j]; }
-    const T& operator()(std::size_t i, std::size_t j) const
-        requires (!std::is_same_v<T, bool>)
+    decltype(auto) operator()(std::size_t i, std::size_t j)
     { return _storage[i * _cols + j]; }
 
-    bool operator()(std::size_t i, std::size_t j) const
-        requires (std::is_same_v<T, bool>)
+    decltype(auto) operator()(std::size_t i, std::size_t j) const
     { return _storage[i * _cols + j]; }
-
-    void set(std::size_t i, std::size_t j, bool v)
-        requires (std::is_same_v<T, bool>)
-    { _storage[i * _cols + j] = v; }
 
 private:
     std::size_t _rows, _cols;

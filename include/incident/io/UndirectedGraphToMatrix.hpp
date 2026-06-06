@@ -13,14 +13,14 @@ Matrix<bool> toAdjacencyMatrix(const UndirectedGraph<VertexData, void>& g) {
 
     for (std::size_t i = 0; i < n; ++i)
         for (std::size_t j = 0; j < n; ++j)
-            mat.set(i, j, false);
+            mat(i, j) = false;
 
     for (auto v : g.vertices()) {
         for (auto e : v.incidentEdges()) {
             auto u = *e.otherEnd(v);
 
-            mat.set(v.data(), u.data(), true);
-            mat.set(u.data(), v.data(), true);
+            mat(v.data(), u.data()) = true;
+            mat(u.data(), v.data()) = true;
         }
     }
     return mat;

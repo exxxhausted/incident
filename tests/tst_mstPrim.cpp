@@ -89,10 +89,8 @@ TEST_CASE("mstPrim algorithm", "[prim][mst]") {
         CHECK(mst.edgeCount() == 3);
         // Ожидаемый вес: 1+2+3 = 6 (ребра 0-1,0-2,0-3)
         CHECK(totalWeight(mst) == 6);
-        for (auto it = mst.edges().begin(); it != mst.edges().end(); ++it) {
-            auto e = *it;
+        for (auto e : g.edges())
             CHECK(g.hasEdge(e.v1(), e.v2()));
-        }
     }
 
     // 6. Отрицательные веса

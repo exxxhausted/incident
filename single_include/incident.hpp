@@ -3765,7 +3765,7 @@ inline std::string to_string(GraphBuildingError error) noexcept {
     case GraphBuildingError::NullPointer:          return "NullPointer: input matrix pointer is null";
     case GraphBuildingError::ZeroSize:             return "ZeroSize: matrix size is zero";
     case GraphBuildingError::NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
-    default:                   return "Unknown error";
+    default:                                       return "Unknown error";
     }
 }
 
@@ -4928,20 +4928,11 @@ public:
 
     const T* data() const { return _storage.data(); }
 
-    T& operator()(std::size_t i, std::size_t j)
-        requires (!std::is_same_v<T, bool>)
-    { return _storage[i * _cols + j]; }
-    const T& operator()(std::size_t i, std::size_t j) const
-        requires (!std::is_same_v<T, bool>)
+    decltype(auto) operator()(std::size_t i, std::size_t j)
     { return _storage[i * _cols + j]; }
 
-    bool operator()(std::size_t i, std::size_t j) const
-        requires (std::is_same_v<T, bool>)
+    decltype(auto) operator()(std::size_t i, std::size_t j) const
     { return _storage[i * _cols + j]; }
-
-    void set(std::size_t i, std::size_t j, bool v)
-        requires (std::is_same_v<T, bool>)
-    { _storage[i * _cols + j] = v; }
 
 private:
     std::size_t _rows, _cols;
@@ -4961,14 +4952,14 @@ Matrix<bool> toAdjacencyMatrix(const UndirectedGraph<VertexData, void>& g) {
 
     for (std::size_t i = 0; i < n; ++i)
         for (std::size_t j = 0; j < n; ++j)
-            mat.set(i, j, false);
+            mat(i, j) = false;
 
     for (auto v : g.vertices()) {
         for (auto e : v.incidentEdges()) {
             auto u = *e.otherEnd(v);
 
-            mat.set(v.data(), u.data(), true);
-            mat.set(u.data(), v.data(), true);
+            mat(v.data(), u.data()) = true;
+            mat(u.data(), v.data()) = true;
         }
     }
     return mat;
