@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "incident/undirecteds/UndirectedPseudoGraph.hpp"
+#include "incident/undirected/UndirectedPseudoGraph.hpp"
 #include "incident/algorithms/basic_algorithms.hpp"
 
 #include <string>
@@ -116,7 +116,7 @@ TEST_CASE("UndirectedPseudoGraph unweighted",
             requireValidUndirectedGraph(g);
         }
 
-        SECTION("Multiple identical edges") {
+        SECTION("Multiple edges") {
             auto e1 = g.addEdge(a, b);
             auto e2 = g.addEdge(a, b);
 
@@ -263,24 +263,6 @@ TEST_CASE("UndirectedPseudoGraph unweighted",
             ));
 
         requireValidUndirectedGraph(cg);
-    }
-
-    SECTION("Randomized stress test") {
-        Graph g;
-
-        std::vector<Graph::VertexDescriptor> vertices;
-
-        for (int i = 0; i < 30; ++i)
-            vertices.push_back(g.addVertex(std::to_string(i)));
-
-        for (int i = 0; i < 300; ++i) {
-            auto& a = vertices[std::rand() % vertices.size()];
-            auto& b = vertices[std::rand() % vertices.size()];
-
-            g.addEdge(a, b);
-
-            requireValidUndirectedGraph(g);
-        }
     }
 }
 

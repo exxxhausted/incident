@@ -6,7 +6,7 @@
 #include <vector>
 #include <expected>
 
-#include "../undirecteds/UndirectedGraph.hpp"
+#include "../undirected/UndirectedGraph.hpp"
 
 namespace exx::incident {
 

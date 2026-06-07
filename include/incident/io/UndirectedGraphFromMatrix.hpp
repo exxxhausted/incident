@@ -1,7 +1,7 @@
 #ifndef EXX_UNDIRECTEDGRAPHFROMMATRIX_HPP
 #define EXX_UNDIRECTEDGRAPHFROMMATRIX_HPP
 
-#include "../undirecteds/UndirectedGraph.hpp"
+#include "../undirected/UndirectedGraph.hpp"
 #include "../utility/utility.hpp"
 
 #include <expected>
