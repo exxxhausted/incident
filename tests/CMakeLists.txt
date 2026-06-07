@@ -10,7 +10,7 @@ if(NOT Catch2_FOUND)
     FetchContent_MakeAvailable(Catch2)
 endif()
 
-file(GLOB TEST_SOURCES "*.cpp")
+file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "*.cpp")
 add_executable(incident_tests ${TEST_SOURCES})
 
 target_link_libraries(incident_tests PRIVATE

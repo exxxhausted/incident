@@ -1,5 +1,5 @@
-#ifndef EXX_UNDIRECTEDABSTRACTGRAPH_HPP
-#define EXX_UNDIRECTEDABSTRACTGRAPH_HPP
+#ifndef EXX_UNDIRECTEDPSEUDOGRAPH_HPP
+#define EXX_UNDIRECTEDPSEUDOGRAPH_HPP
 
 #include <list>
 #include <ranges>
@@ -9,12 +9,12 @@
 #include <unordered_map>
 #include <algorithm>
 
-#include "details/hash_std_injection.hpp" // IWYU pragma: keep
+#include "../details/hash_std_injection.hpp" // IWYU pragma: keep
 
 namespace exx::incident {
 
 template<typename VertexData, typename EdgeData>
-class UndirectedAbstractGraph {
+class UndirectedPseudoGraph {
 private:
     struct Vertex;
     struct Edge;
@@ -87,7 +87,7 @@ private:
 
         ConditionalVertexLabel _label;
 
-        friend class UndirectedAbstractGraph;
+        friend class UndirectedPseudoGraph;
 
     public:
         VertexDescriptorImpl() = default;
@@ -140,7 +140,7 @@ private:
 
         ConditionalEdgeLabel _label;
 
-        friend class UndirectedAbstractGraph;
+        friend class UndirectedPseudoGraph;
 
     public:
         EdgeDescriptorImpl() = default;
@@ -155,8 +155,8 @@ private:
         auto& data()       requires (!std::is_void_v<EdgeData> && !isConst) { return _label->_data; }
         const auto& data() const requires (!std::is_void_v<EdgeData>) { return _label->_data; }
 
-        VertexDescriptorImpl<isConst> v1() const { return VertexDescriptorImpl<isConst>(_label->_v1); }
-        VertexDescriptorImpl<isConst> v2() const { return VertexDescriptorImpl<isConst>(_label->_v2); }
+        VertexDescriptorImpl<isConst> v() const { return VertexDescriptorImpl<isConst>(_label->_v1); }
+        VertexDescriptorImpl<isConst> u() const { return VertexDescriptorImpl<isConst>(_label->_v2); }
 
         std::optional<VertexDescriptorImpl<isConst>> otherEnd(const VertexDescriptorImpl<isConst>& vertex) const {
             if (vertex._label == _label->_v1)
@@ -180,7 +180,7 @@ private:
 
         ConditionalVertexLabel _it;
 
-        friend class UndirectedAbstractGraph;
+        friend class UndirectedPseudoGraph;
 
     public:
         using difference_type       = std::ptrdiff_t;
@@ -214,7 +214,7 @@ private:
 
         ConditionalEdgeLabel _it;
 
-        friend class UndirectedAbstractGraph;
+        friend class UndirectedPseudoGraph;
 
     public:
         using difference_type       = std::ptrdiff_t;
@@ -256,9 +256,9 @@ public:
     using EdgeIterator        = EdgeIteratorImpl<false>;
     using ConstEdgeIterator   = EdgeIteratorImpl<true>;
 
-    UndirectedAbstractGraph() = default;
+    UndirectedPseudoGraph() = default;
 
-    UndirectedAbstractGraph(const UndirectedAbstractGraph& other) {
+    UndirectedPseudoGraph(const UndirectedPseudoGraph& other) {
         std::unordered_map<const Vertex*, VertexDescriptor> origToNew;
 
         for (const auto& origVertex : other._vertices) {
@@ -275,17 +275,17 @@ public:
         }
     }
 
-    UndirectedAbstractGraph(UndirectedAbstractGraph&&) noexcept = default;
+    UndirectedPseudoGraph(UndirectedPseudoGraph&&) noexcept = default;
 
-    UndirectedAbstractGraph& operator=(const UndirectedAbstractGraph& other) {
+    UndirectedPseudoGraph& operator=(const UndirectedPseudoGraph& other) {
         if (this != &other) {
-            UndirectedAbstractGraph temp(other);
+            UndirectedPseudoGraph temp(other);
             *this = std::move(temp);
         }
         return *this;
     }
 
-    UndirectedAbstractGraph& operator=(UndirectedAbstractGraph&&) noexcept = default;
+    UndirectedPseudoGraph& operator=(UndirectedPseudoGraph&&) noexcept = default;
 
     template<typename... Args>
     VertexDescriptor emplaceVertex(Args&&... args) {
@@ -332,13 +332,12 @@ public:
         } rollback(_edges, it, from._label, to._label);
 
         from._label->_incidentEdges.push_back(it);
+        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         rollback.v1_done = true;
 
         to._label->_incidentEdges.push_back(it);
-        rollback.v2_done = true;
-
-        it->_meta._posInV1 = std::prev(from._label->_incidentEdges.end());
         it->_meta._posInV2 = std::prev(to._label->_incidentEdges.end());
+        rollback.v2_done = true;
 
         rollback.commit();
 
@@ -416,4 +415,4 @@ public:
 
 } // namespace exx::incident
 
-#endif // EXX_UNDIRECTEDABSTRACTGRAPH_HPP
+#endif // EXX_UNDIRECTEDPSEUDOGRAPH_HPP

@@ -1,7 +1,7 @@
 #ifndef EXX_UNDIRECTEDGRAPHTOMATRIX_HPP
 #define EXX_UNDIRECTEDGRAPHTOMATRIX_HPP
 
-#include "../UndirectedGraph.hpp"
+#include "../undirecteds/UndirectedGraph.hpp"
 #include "Matrix.hpp"
 
 namespace exx::incident {
@@ -18,7 +18,6 @@ Matrix<bool> toAdjacencyMatrix(const UndirectedGraph<VertexData, void>& g) {
     for (auto v : g.vertices()) {
         for (auto e : v.incidentEdges()) {
             auto u = *e.otherEnd(v);
-
             mat(v.data(), u.data()) = true;
             mat(u.data(), v.data()) = true;
         }

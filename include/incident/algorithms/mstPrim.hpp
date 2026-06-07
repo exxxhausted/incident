@@ -6,7 +6,7 @@
 #include <vector>
 #include <expected>
 
-#include "../UndirectedGraph.hpp"
+#include "../undirecteds/UndirectedGraph.hpp"
 
 namespace exx::incident {
 
@@ -17,19 +17,17 @@ enum class PrimError {
 inline std::string to_string(PrimError e) {
     switch (e) {
     case PrimError::DisconnectedGraph: return "Graph is disconnected.";
-    default:                           return "Неизвестная ошибка";
+    default:                           return "Unknown error";
     }
 }
 
 template<typename VertexData,
-         typename EdgeData,
-         typename VHash>
-    requires (!std::is_void_v<EdgeData> &&
-             std::is_copy_constructible_v<EdgeData>)
-auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
-    -> std::expected<UndirectedGraph<VertexData, EdgeData, VHash>, PrimError>
+         typename EdgeData>
+    requires std::is_copy_constructible_v<EdgeData>
+auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
+    -> std::expected<UndirectedGraph<VertexData, EdgeData>, PrimError>
 {
-    using GraphType = UndirectedGraph<VertexData, EdgeData, VHash>;
+    using GraphType = UndirectedGraph<VertexData, EdgeData>;
     using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
     using VertexDesc = typename GraphType::VertexDescriptor;
 
@@ -39,7 +37,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     std::unordered_map<ConstVertexDesc, VertexDesc> newDescOf;
 
     for (auto v : graph.constVertices()) {
-        VertexDesc newDesc = *(mst.addVertex(v.data()));
+        VertexDesc newDesc = mst.addVertex(v.data());
         newDescOf[v] = newDesc;
     }
 
@@ -61,7 +59,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
     visited.insert(startDesc);
 
     for (auto edge : startDesc.incidentEdges()) {
-        auto otherDesc = edge.otherEnd(startDesc); // всегда валидный
+        auto otherDesc = edge.otherEnd(startDesc); // always valid
         if (!visited.contains(*otherDesc))
             pq.push({ edge.data(), *otherDesc, startDesc });
     }
@@ -76,7 +74,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData, VHash>& graph)
         mst.addEdge(newDescOf[parentDesc], newDescOf[vDesc], weight);
 
         for (auto edge : vDesc.incidentEdges()) {
-            auto otherDesc = edge.otherEnd(vDesc); // всегда валидный
+            auto otherDesc = edge.otherEnd(vDesc); // always valid
             if (!visited.contains(*otherDesc))
                 pq.push({ edge.data(), *otherDesc, vDesc });
         }

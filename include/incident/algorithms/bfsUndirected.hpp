@@ -4,7 +4,7 @@
 #include <queue>
 #include <unordered_set>
 
-#include "../graph_concepts.hpp"
+#include "../details/graph_concepts.hpp"
 
 namespace exx::incident {
 

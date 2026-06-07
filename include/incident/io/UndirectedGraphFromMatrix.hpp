@@ -1,7 +1,8 @@
 #ifndef EXX_UNDIRECTEDGRAPHFROMMATRIX_HPP
 #define EXX_UNDIRECTEDGRAPHFROMMATRIX_HPP
 
-#include "../UndirectedGraph.hpp"
+#include "../undirecteds/UndirectedGraph.hpp"
+#include "../utility/utility.hpp"
 
 #include <expected>
 
@@ -33,12 +34,15 @@ auto buildUndirectedGraph(const EdgeData* matrix, std::size_t n)
     UndirectedGraph<std::size_t, EdgeData> g;
 
     for (std::size_t i = 0; i < n; ++i) g.addVertex(i);
+    auto acc = UniqueVertexSearchAccelerator(g);
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n; ++j) {
             auto val = matrix[i * n + j];
             if (val != EdgeData{})
-                g.addEdge(i, j, val);
+                g.addEdge(*acc.map(i),
+                          *acc.map(j),
+                          val);
         }
     }
 
@@ -70,11 +74,14 @@ inline auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)
     UndirectedGraph<std::size_t, void> g;
 
     for (std::size_t i = 0; i < n; ++i) g.addVertex(i);
+    auto acc = UniqueVertexSearchAccelerator(g);
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n; ++j) {
             auto val = matrix[i * n + j];
-            if (val) g.addEdge(i, j);
+            if (val)
+                g.addEdge(*acc.map(i),
+                          *acc.map(j));
         }
     }
 

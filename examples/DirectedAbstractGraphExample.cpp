@@ -1,4 +1,4 @@
-#include "incident/DirectedAbstractGraph.hpp"
+#include "incident/directeds/DirectedAbstractGraph.hpp"
 
 #include <iostream>
 #include <string>

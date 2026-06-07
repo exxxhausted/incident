@@ -7,6 +7,27 @@
 namespace exx::incident {
 
 template<typename G>
+concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
+    typename G::VertexValueType;
+    typename G::EdgeValueType;
+
+    typename G::VertexDescriptor;
+
+    requires std::copyable<typename G::VertexDescriptor>;
+    requires std::equality_comparable<typename G::VertexDescriptor>;
+
+    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
+
+    { g.vertices() } -> std::ranges::range;
+    { cg.vertices() } -> std::ranges::range;
+
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(g.vertices())>,
+        typename G::VertexDescriptor
+        >;
+};
+
+template<typename G>
 concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
     typename G::VertexValueType;
     typename G::VertexDescriptor;
