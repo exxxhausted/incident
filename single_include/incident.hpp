@@ -433,6 +433,11 @@ public:
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
 
+    bool hasVertex(const VertexData& data) const {
+        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
+        return it != vertices().end();
+    }
+
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
@@ -704,143 +709,6 @@ private:
 
 #ifndef EXX_ALGORITHMS_HPP
 #define EXX_ALGORITHMS_HPP
-
-#ifndef EXX_BASIC_ALGORITHMS_HPP
-#define EXX_BASIC_ALGORITHMS_HPP
-
-#include <algorithm>
-
-#ifndef EXX_GRAPHCONCEPTS_HPP
-#define EXX_GRAPHCONCEPTS_HPP
-
-#include <concepts>
-#include <ranges>
-
-namespace exx::incident {
-
-template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
-    typename G::VertexValueType;
-    typename G::EdgeValueType;
-
-    typename G::VertexDescriptor;
-
-    requires std::copyable<typename G::VertexDescriptor>;
-    requires std::equality_comparable<typename G::VertexDescriptor>;
-
-    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
-
-    { g.vertices() } -> std::ranges::range;
-    { cg.vertices() } -> std::ranges::range;
-
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(g.vertices())>,
-        typename G::VertexDescriptor
-        >;
-};
-
-template<typename G>
-concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
-    typename G::VertexValueType;
-    typename G::VertexDescriptor;
-    typename G::ConstVertexDescriptor;
-    typename G::VertexIterator;
-    typename G::ConstVertexIterator;
-
-    { g.beginVertices() } -> std::forward_iterator;
-    { g.endVertices() }   -> std::forward_iterator;
-
-    { cg.beginVertices() } -> std::forward_iterator;
-    { cg.endVertices() }   -> std::forward_iterator;
-
-    { g.vertexCount() } -> std::integral;
-    { cg.vertexCount() } -> std::integral;
-
-    { v.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
-        typename G::VertexDescriptor
-        >;
-
-    { cv.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
-        typename G::ConstVertexDescriptor
-        >;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_GRAPHCONCEPTS_HPP
-
-namespace exx::incident {
-
-template<Graph G>
-bool containsVertex(const G& g, const typename G::VertexValueType& data) {
-    auto it = std::ranges::find_if(g.vertices(), [&](auto vd){ return vd.data() == data; });
-    return it != g.vertices().end();
-}
-
-template<Graph G, typename Acc>
-bool containsVertex(const G& g,
-                     const typename G::VertexValueType& data,
-                     const Acc& acc)
-{ return acc.contains(data); }
-
-template<Graph G>
-auto findVertex(G& g, const typename G::VertexValueType& data)
-    ->std::optional<typename G::VertexDescriptor>
-{
-    auto it = std::ranges::find_if(g.vertices(), [&](auto vd){ return vd.data() == data; });
-    if (it != g.vertices().end())
-        return *it;
-    return std::nullopt;
-}
-
-template<Graph G>
-auto findVertex(const G& g, const typename G::VertexValueType& data)
-    ->std::optional<typename G::ConstVertexDescriptor>
-{
-    auto it = std::ranges::find_if(g.vertices(), [&](auto vd){ return vd.data() == data; });
-    if (it != g.vertices().end())
-        return *it;
-    return std::nullopt;
-}
-
-template<Graph G, typename Acc>
-auto findVertex(const G& g,
-                 const typename G::VertexValueType& data,
-                 const Acc& acc)
-{ return acc.map(data); }
-
-/*
-template<Graph G, typename Pred>
-auto findVertexIf(G& g, Pred pred)
-    ->std::optional<typename G::VertexDescriptor>
-{
-    auto range = g.vertices()
-                 | std::views::transform([](auto v) { return v.data(); });
-    auto it = std::ranges::find(range, pred);
-    if (it != range.end())
-        return *it;
-    return std::nullopt;
-}
-
-template<Graph G, typename Pred>
-auto findVertexIf(const G& g, Pred pred)
-    ->std::optional<typename G::ConstVertexDescriptor>
-{
-    auto range = g.vertices()
-                 | std::views::transform([](auto v) { return v.data(); });
-    auto it = std::ranges::find(range, pred);
-    if (it != range.end())
-        return *it;
-    return std::nullopt;
-}
-*/
-} // namespace exx::incident
-
-#endif // EXX_BASIC_ALGORITHMS_HPP
 
 #ifndef EXX_MSTPRIM_HPP
 #define EXX_MSTPRIM_HPP
@@ -1279,6 +1147,11 @@ public:
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
 
+    bool hasVertex(const VertexData& data) const {
+        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
+        return it != vertices().end();
+    }
+
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
@@ -1643,7 +1516,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
 namespace exx::incident {
 
 template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
+concept GraphConcept = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
     typename G::VertexValueType;
     typename G::EdgeValueType;
 
@@ -1750,7 +1623,7 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 namespace exx::incident {
 
 template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
+concept GraphConcept = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
     typename G::VertexValueType;
     typename G::EdgeValueType;
 
@@ -2277,6 +2150,11 @@ public:
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
 
+    bool hasVertex(const VertexData& data) const {
+        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
+        return it != vertices().end();
+    }
+
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
@@ -2544,365 +2422,8 @@ private:
 
 #endif // EXX_UNDIRECTEDGRAPH_HPP
 
-#ifndef EXX_UTILITY_HPP
-#define EXX_UTILITY_HPP
-
-#ifndef EXX_VERTEXSEARCHACCELERATOR_HPP
-#define EXX_VERTEXSEARCHACCELERATOR_HPP
-
-#include <unordered_map>
-#include <ranges>
-#include <type_traits>
-#ifndef EXX_GRAPHCONCEPTS_HPP
-#define EXX_GRAPHCONCEPTS_HPP
-
-#include <concepts>
-#include <ranges>
-
-namespace exx::incident {
-
-template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
-    typename G::VertexValueType;
-    typename G::EdgeValueType;
-
-    typename G::VertexDescriptor;
-
-    requires std::copyable<typename G::VertexDescriptor>;
-    requires std::equality_comparable<typename G::VertexDescriptor>;
-
-    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
-
-    { g.vertices() } -> std::ranges::range;
-    { cg.vertices() } -> std::ranges::range;
-
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(g.vertices())>,
-        typename G::VertexDescriptor
-        >;
-};
-
-template<typename G>
-concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
-    typename G::VertexValueType;
-    typename G::VertexDescriptor;
-    typename G::ConstVertexDescriptor;
-    typename G::VertexIterator;
-    typename G::ConstVertexIterator;
-
-    { g.beginVertices() } -> std::forward_iterator;
-    { g.endVertices() }   -> std::forward_iterator;
-
-    { cg.beginVertices() } -> std::forward_iterator;
-    { cg.endVertices() }   -> std::forward_iterator;
-
-    { g.vertexCount() } -> std::integral;
-    { cg.vertexCount() } -> std::integral;
-
-    { v.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
-        typename G::VertexDescriptor
-        >;
-
-    { cv.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
-        typename G::ConstVertexDescriptor
-        >;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_GRAPHCONCEPTS_HPP
-
-namespace exx::incident {
-
-template<Graph G,
-         typename Descriptor = typename G::VertexDescriptor,
-         typename VertexHash = std::hash<typename G::VertexValueType>,
-         typename KeyEqual = std::equal_to<typename G::VertexValueType>>
-class VertexSearchAccelerator {
-    static_assert(std::is_same_v<Descriptor, typename G::VertexDescriptor> ||
-                      std::is_same_v<Descriptor, typename G::ConstVertexDescriptor>,
-                  "Descriptor must be VertexDescriptor or ConstVertexDescriptor");
-
-public:
-    using DescriptorType = Descriptor;
-    using MapType = std::unordered_multimap<typename G::VertexValueType, Descriptor, VertexHash, KeyEqual>;
-    using const_iterator = typename MapType::const_iterator;
-    using iterator_range = std::ranges::subrange<const_iterator>;
-
-    VertexSearchAccelerator() = default;
-    explicit VertexSearchAccelerator(G& graph) { rebuild(graph); }
-
-    void add(Descriptor v) { _mht.emplace(v.data(), v); }
-
-    void remove(Descriptor v) {
-        auto range = _mht.equal_range(v.data());
-        for (auto it = range.first; it != range.second; ++it) {
-            if (it->second == v) {
-                _mht.erase(it);
-                return;
-            }
-        }
-    }
-
-    void update(Descriptor v, const typename G::VertexValueType& oldData) {
-        auto range = _mht.equal_range(oldData);
-        for (auto it = range.first; it != range.second; ++it) {
-            if (it->second == v) {
-                _mht.erase(it);
-                break;
-            }
-        }
-        _mht.emplace(v.data(), v);
-    }
-
-    void rebuild(G& graph) {
-        clear();
-        for (auto v : graph.vertices())
-            _mht.emplace(v.data(), Descriptor(v));
-    }
-
-    void clear() { _mht.clear(); }
-
-    iterator_range find(const typename G::VertexValueType& data) const {
-        auto range = _mht.equal_range(data);
-        return iterator_range(range.first, range.second);
-    }
-
-    bool contains(const typename G::VertexValueType& data) const
-    { return _mht.find(data) != _mht.end(); }
-
-    std::size_t size() const { return _mht.size(); }
-    bool empty() const { return _mht.empty(); }
-
-private:
-    MapType _mht;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_VERTEXSEARCHACCELERATOR_HPP
-
-#ifndef EXX_UNIQUEVERTEXSEARCHACCELERATOR_HPP
-#define EXX_UNIQUEVERTEXSEARCHACCELERATOR_HPP
-
-#include <unordered_map>
-#include <optional>
-#include <type_traits>
-#ifndef EXX_GRAPHCONCEPTS_HPP
-#define EXX_GRAPHCONCEPTS_HPP
-
-#include <concepts>
-#include <ranges>
-
-namespace exx::incident {
-
-template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
-    typename G::VertexValueType;
-    typename G::EdgeValueType;
-
-    typename G::VertexDescriptor;
-
-    requires std::copyable<typename G::VertexDescriptor>;
-    requires std::equality_comparable<typename G::VertexDescriptor>;
-
-    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
-
-    { g.vertices() } -> std::ranges::range;
-    { cg.vertices() } -> std::ranges::range;
-
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(g.vertices())>,
-        typename G::VertexDescriptor
-        >;
-};
-
-template<typename G>
-concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
-    typename G::VertexValueType;
-    typename G::VertexDescriptor;
-    typename G::ConstVertexDescriptor;
-    typename G::VertexIterator;
-    typename G::ConstVertexIterator;
-
-    { g.beginVertices() } -> std::forward_iterator;
-    { g.endVertices() }   -> std::forward_iterator;
-
-    { cg.beginVertices() } -> std::forward_iterator;
-    { cg.endVertices() }   -> std::forward_iterator;
-
-    { g.vertexCount() } -> std::integral;
-    { cg.vertexCount() } -> std::integral;
-
-    { v.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
-        typename G::VertexDescriptor
-        >;
-
-    { cv.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
-        typename G::ConstVertexDescriptor
-        >;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_GRAPHCONCEPTS_HPP
-
-namespace exx::incident {
-
-template<Graph G,
-         typename Descriptor = typename G::VertexDescriptor,
-         typename VertexHash = std::hash<typename G::VertexValueType>>
-class UniqueVertexSearchAccelerator {
-
-    static_assert(std::is_same_v<Descriptor, typename G::VertexDescriptor> ||
-                  std::is_same_v<Descriptor, typename G::ConstVertexDescriptor>,
-                  "Descriptor must be VertexDescriptor or ConstVertexDescriptor");
-
-public:
-    using DescriptorType = Descriptor;
-
-    UniqueVertexSearchAccelerator() = default;
-    explicit UniqueVertexSearchAccelerator(G& g) { rebuild(g); }
-
-    void add(Descriptor v) { _ht.emplace(v.data(), v); }
-
-    void remove(Descriptor v) { _ht.erase(v.data()); }
-
-    void update(Descriptor v, const typename G::VertexValueType& oldData) {
-        auto it = _ht.find(oldData);
-        if (it != _ht.end() && it->second == v)
-            _ht.erase(it);
-        _ht.emplace(v.data(), v);
-    }
-
-    void clear() { _ht.clear(); }
-
-    void rebuild(G& g) {
-        clear();
-        for (auto v : g.vertices())
-            _ht.emplace(v.data(), v);
-    }
-
-    std::optional<Descriptor> map(const typename G::VertexValueType& data) const {
-        auto it = _ht.find(data);
-        if (it != _ht.end()) return it->second;
-        return std::nullopt;
-    }
-
-    bool contains(const typename G::VertexValueType& data) const
-    { return _ht.find(data) != _ht.end(); }
-
-    std::size_t size() const { return _ht.size(); }
-    bool empty() const { return _ht.empty(); }
-
-private:
-    std::unordered_map<typename G::VertexValueType,
-                       Descriptor,
-                       VertexHash> _ht;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_UNIQUEVERTEXSEARCHACCELERATOR_HPP
-
-#ifndef EXX_VSAUTILITYFUNCTIONS_HPP
-#define EXX_VSAUTILITYFUNCTIONS_HPP
-
-#ifndef EXX_GRAPHCONCEPTS_HPP
-#define EXX_GRAPHCONCEPTS_HPP
-
-#include <concepts>
-#include <ranges>
-
-namespace exx::incident {
-
-template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
-    typename G::VertexValueType;
-    typename G::EdgeValueType;
-
-    typename G::VertexDescriptor;
-
-    requires std::copyable<typename G::VertexDescriptor>;
-    requires std::equality_comparable<typename G::VertexDescriptor>;
-
-    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
-
-    { g.vertices() } -> std::ranges::range;
-    { cg.vertices() } -> std::ranges::range;
-
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(g.vertices())>,
-        typename G::VertexDescriptor
-        >;
-};
-
-template<typename G>
-concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
-    typename G::VertexValueType;
-    typename G::VertexDescriptor;
-    typename G::ConstVertexDescriptor;
-    typename G::VertexIterator;
-    typename G::ConstVertexIterator;
-
-    { g.beginVertices() } -> std::forward_iterator;
-    { g.endVertices() }   -> std::forward_iterator;
-
-    { cg.beginVertices() } -> std::forward_iterator;
-    { cg.endVertices() }   -> std::forward_iterator;
-
-    { g.vertexCount() } -> std::integral;
-    { cg.vertexCount() } -> std::integral;
-
-    { v.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
-        typename G::VertexDescriptor
-        >;
-
-    { cv.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
-        typename G::ConstVertexDescriptor
-        >;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_GRAPHCONCEPTS_HPP
-
-namespace exx::incident {
-
-template<Graph G, typename Acc>
-auto add_vertex(G& g, Acc& acc, const typename G::VertexValueType& data) {
-    auto v = g.addVertex(data);
-    acc.add(v);
-    return v;
-}
-
-template<Graph G, typename Acc>
-    requires (!std::is_same_v<typename Acc::DescriptorType,
-                              typename G::ConstVertexDescriptor>)
-void remove_vertex(G& g, Acc& acc, typename Acc::DescriptorType v) {
-    acc.remove(v);
-    g.removeVertex(v);
-}
-
-} // namespace exx::incident
-
-#endif // EXX_VSAUTILITYFUNCTIONS_HPP
-
-#endif // EXX_UTILITY_HPP
-
 #include <expected>
+#include <unordered_map>
 
 namespace exx::incident {
 
@@ -2930,17 +2451,19 @@ auto buildUndirectedGraph(const EdgeData* matrix, std::size_t n)
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
     UndirectedGraph<std::size_t, EdgeData> g;
+    std::unordered_map<std::size_t,
+                       typename UndirectedGraph<std::size_t, EdgeData>::VertexDescriptor> ht;
 
-    for (std::size_t i = 0; i < n; ++i) g.addVertex(i);
-    auto acc = UniqueVertexSearchAccelerator(g);
+    for (std::size_t i = 0; i < n; ++i) {
+        auto desc = g.addVertex(i);
+        ht.emplace(i, desc);
+    }
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n; ++j) {
             auto val = matrix[i * n + j];
             if (val != EdgeData{})
-                g.addEdge(*acc.map(i),
-                          *acc.map(j),
-                          val);
+                g.addEdge(ht[i], ht[j], val);
         }
     }
 
@@ -2970,16 +2493,18 @@ inline auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
     UndirectedGraph<std::size_t, void> g;
+    std::unordered_map<std::size_t,
+                       typename UndirectedGraph<std::size_t, void>::VertexDescriptor> ht;
 
-    for (std::size_t i = 0; i < n; ++i) g.addVertex(i);
-    auto acc = UniqueVertexSearchAccelerator(g);
+    for (std::size_t i = 0; i < n; ++i) {
+        auto desc = g.addVertex(i);
+        ht.emplace(i, desc);
+    }
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n; ++j) {
             auto val = matrix[i * n + j];
-            if (val)
-                g.addEdge(*acc.map(i),
-                          *acc.map(j));
+            if (val) g.addEdge(ht[i], ht[j]);
         }
     }
 
@@ -3437,6 +2962,11 @@ public:
 
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
+
+    bool hasVertex(const VertexData& data) const {
+        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
+        return it != vertices().end();
+    }
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())

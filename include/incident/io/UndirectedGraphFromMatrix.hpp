@@ -2,9 +2,9 @@
 #define EXX_UNDIRECTEDGRAPHFROMMATRIX_HPP
 
 #include "../undirected/UndirectedGraph.hpp"
-#include "../utility/utility.hpp"
 
 #include <expected>
+#include <unordered_map>
 
 namespace exx::incident {
 
@@ -32,17 +32,19 @@ auto buildUndirectedGraph(const EdgeData* matrix, std::size_t n)
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
     UndirectedGraph<std::size_t, EdgeData> g;
+    std::unordered_map<std::size_t,
+                       typename UndirectedGraph<std::size_t, EdgeData>::VertexDescriptor> ht;
 
-    for (std::size_t i = 0; i < n; ++i) g.addVertex(i);
-    auto acc = UniqueVertexSearchAccelerator(g);
+    for (std::size_t i = 0; i < n; ++i) {
+        auto desc = g.addVertex(i);
+        ht.emplace(i, desc);
+    }
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n; ++j) {
             auto val = matrix[i * n + j];
             if (val != EdgeData{})
-                g.addEdge(*acc.map(i),
-                          *acc.map(j),
-                          val);
+                g.addEdge(ht[i], ht[j], val);
         }
     }
 
@@ -72,16 +74,18 @@ inline auto buildUndirectedGraph(const std::vector<bool> matrix, std::size_t n)
     if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
     UndirectedGraph<std::size_t, void> g;
+    std::unordered_map<std::size_t,
+                       typename UndirectedGraph<std::size_t, void>::VertexDescriptor> ht;
 
-    for (std::size_t i = 0; i < n; ++i) g.addVertex(i);
-    auto acc = UniqueVertexSearchAccelerator(g);
+    for (std::size_t i = 0; i < n; ++i) {
+        auto desc = g.addVertex(i);
+        ht.emplace(i, desc);
+    }
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n; ++j) {
             auto val = matrix[i * n + j];
-            if (val)
-                g.addEdge(*acc.map(i),
-                          *acc.map(j));
+            if (val) g.addEdge(ht[i], ht[j]);
         }
     }
 

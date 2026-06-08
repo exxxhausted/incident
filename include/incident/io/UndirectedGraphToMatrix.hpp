@@ -2,7 +2,7 @@
 #define EXX_UNDIRECTEDGRAPHTOMATRIX_HPP
 
 #include "../undirected/UndirectedGraph.hpp"
-#include "Matrix.hpp"
+#include "../details/Matrix.hpp"
 
 namespace exx::incident {
 

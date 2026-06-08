@@ -7,7 +7,7 @@
 namespace exx::incident {
 
 template<typename G>
-concept Graph = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
+concept GraphConcept = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
     typename G::VertexValueType;
     typename G::EdgeValueType;
 

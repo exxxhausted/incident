@@ -390,6 +390,11 @@ public:
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
 
+    bool hasVertex(const VertexData& data) const {
+        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
+        return it != vertices().end();
+    }
+
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
