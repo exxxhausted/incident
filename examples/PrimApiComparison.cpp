@@ -370,8 +370,6 @@ int main() {
 */
 
 #include "incident/algorithms/mstPrim.hpp"
-#include "incident/io/UndirectedGraphFromMatrix.hpp"
-#include "incident/io/UndirectedGraphToMatrix.hpp"
 
 #include <iostream>
 
@@ -387,7 +385,7 @@ int main() {
         0,5,7,9,0
     };
 
-    auto G = buildUndirectedGraph(adj_matrix, n);
+    auto G = UndirectedGraph<std::size_t, int>::fromAdjacencyMatrix(adj_matrix, n);
 
     if(!G) {
         std::cerr << to_string(G.error());
@@ -401,7 +399,7 @@ int main() {
         return 1;
     }
 
-    auto adjMatrix = toAdjacencyMatrix(*mstG);
+    auto adjMatrix = G->toAdjacencyMatrix();
 
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) std::cout << adjMatrix(i, j) << " ";

@@ -3,6 +3,5 @@
 
 #include "undirected/undirected.hpp" // IWYU pragma: keep
 #include "algorithms/algorithms.hpp" // IWYU pragma: keep
-#include "io/io.hpp"                 // IWYU pragma: keep
 
 #endif // EXX_INCIDENT_HPP

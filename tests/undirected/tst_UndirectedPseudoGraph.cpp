@@ -36,7 +36,7 @@ void requireValidUndirectedGraph(const Graph& g){
 }
 
 TEST_CASE("UndirectedPseudoGraph unweighted",
-          "[undirecteds][pseudograph][unweighted]")
+          "[undirected][pseudograph][unweighted]")
 {
     using Graph = UndirectedPseudoGraph<std::string, void>;
 
@@ -248,7 +248,7 @@ TEST_CASE("UndirectedPseudoGraph unweighted",
 }
 
 TEST_CASE("UndirectedPseudoGraph weighted",
-          "[undirecteds][pseudograph][weighted]")
+          "[undirected][pseudograph][weighted]")
 {
     using Graph = UndirectedPseudoGraph<int, double>;
 

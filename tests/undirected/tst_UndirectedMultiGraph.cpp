@@ -36,7 +36,7 @@ void requireValidUndirectedGraph(const Graph& g){
 }
 
 TEST_CASE("UndirectedMultiGraph unweighted",
-          "[undirecteds][multigraph][unweighted]")
+          "[undirected][multigraph][unweighted]")
 {
     using Graph = UndirectedMultiGraph<std::string, void>;
 
