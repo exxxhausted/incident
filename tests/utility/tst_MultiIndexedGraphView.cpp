@@ -1,18 +1,18 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "incident/undirected/UndirectedPseudoGraph.hpp"
-#include "incident/utility/MultiIndexedGraphView.hpp"
+#include "incident/utility/MultiVertexIndexedView.hpp"
 
 using namespace exx::incident;
 using Graph = UndirectedPseudoGraph<std::string, int>;
 
-TEST_CASE("MultiIndexedGraphView", "[view][multi]") {
+TEST_CASE("MultiVertexIndexedView", "[view][multi]") {
     Graph g;
     auto v1 = g.addVertex("X");
     auto v2 = g.addVertex("X"); // duplicate data
     auto v3 = g.addVertex("Y");
 
-    MultiIndexedGraphView<Graph> view(g);
+    MultiVertexIndexedView<Graph> view(g);
 
     SECTION("findVertices returns range of all matches") {
         auto range = view.findVertices("X");

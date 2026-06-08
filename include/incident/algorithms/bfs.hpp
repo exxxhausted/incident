@@ -1,5 +1,5 @@
-#ifndef EXX_BFSUNDIRECTED_HPP
-#define EXX_BFSUNDIRECTED_HPP
+#ifndef EXX_BFS_HPP
+#define EXX_BFS_HPP
 
 #include <queue>
 #include <unordered_set>
@@ -8,7 +8,7 @@
 
 namespace exx::incident {
 
-template<TraversableGraph Graph,
+template<GraphConcept Graph,
          typename Cmp = std::less<typename Graph::VertexValueType>>
 auto bfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
@@ -41,4 +41,4 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 
 } // namespace exx::incident
 
-#endif // EXX_BFSUNDIRECTED_HPP
+#endif // EXX_BFS_HPP

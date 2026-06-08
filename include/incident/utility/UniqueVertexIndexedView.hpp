@@ -1,5 +1,5 @@
-#ifndef EXX_UNIQUEINDEXEDGRAPHVIEW_HPP
-#define EXX_UNIQUEINDEXEDGRAPHVIEW_HPP
+#ifndef EXX_UNIQUEVERTEXINDEXEDVIEW_HPP
+#define EXX_UNIQUEVERTEXINDEXEDVIEW_HPP
 
 #include <unordered_map>
 #include <optional>
@@ -11,21 +11,21 @@ namespace exx::incident {
 template<GraphConcept Graph,
          typename Hash = std::hash<typename Graph::VertexValueType>,
          typename KeyEqual = std::equal_to<typename Graph::VertexValueType>>
-class UniqueIndexedGraphView {
+class UniqueVertexIndexedView {
 public:
     using VertexValueType = typename Graph::VertexValueType;
-    using ConstVertexDescriptor = typename Graph::ConstVertexDescriptor;
+    using VertexDescriptor = typename Graph::VertexDescriptor;
 
-    explicit UniqueIndexedGraphView(const Graph& graph) : graph_(&graph)
+    explicit UniqueVertexIndexedView(Graph& graph) : graph_(graph)
     { rebuild(); }
 
     void rebuild() {
         index_.clear();
-        for (auto v : graph_->vertices())
+        for (auto v : graph_.vertices())
             index_.emplace(v.data(), v);
     }
 
-    std::optional<ConstVertexDescriptor> findVertex(const VertexValueType& key) const {
+    std::optional<VertexDescriptor> findVertex(const VertexValueType& key) const {
         auto it = index_.find(key);
         if (it != index_.end()) return it->second;
         return std::nullopt;
@@ -40,13 +40,13 @@ public:
     size_t size() const { return index_.size(); }
     bool empty() const  { return index_.empty(); }
 
-    const Graph& graph() const { return *graph_; }
+    Graph& graph() { return graph_; }
 
 private:
-    const Graph* graph_;
-    std::unordered_map<VertexValueType, ConstVertexDescriptor, Hash, KeyEqual> index_;
+    Graph& graph_;
+    std::unordered_map<VertexValueType, VertexDescriptor, Hash, KeyEqual> index_;
 };
 
 } // namespace exx::incident
 
-#endif // EXX_UNIQUEINDEXEDGRAPHVIEW_HPP
+#endif // EXX_UNIQUEVERTEXINDEXEDVIEW_HPP

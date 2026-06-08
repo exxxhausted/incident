@@ -1,5 +1,5 @@
-#ifndef EXX_DFSUNDIRECTED_HPP
-#define EXX_DFSUNDIRECTED_HPP
+#ifndef EXX_DFS_HPP
+#define EXX_DFS_HPP
 
 #include <vector>
 #include <stack>
@@ -9,7 +9,7 @@
 
 namespace exx::incident {
 
-template<TraversableGraph Graph,
+template<GraphConcept Graph,
          typename Cmp = std::less<typename Graph::VertexValueType>>
 auto dfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
@@ -41,4 +41,4 @@ auto dfs(Graph& G, typename Graph::VertexDescriptor start)
 
 } // namespace exx::incident
 
-#endif // EXX::DFSUNDIRECTED_HPP
+#endif // EXX_DFS_HPP

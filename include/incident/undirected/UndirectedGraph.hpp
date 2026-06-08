@@ -178,17 +178,17 @@ public:
     template <typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     static auto fromAdjacencyMatrix(const T* matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<std::size_t, T>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
     {
         if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
         if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
-        UndirectedGraph<std::size_t, EdgeData> g;
+        UndirectedGraph<VertexData, EdgeData> g;
         std::unordered_map<std::size_t,
-                           typename UndirectedGraph<std::size_t, EdgeData>::VertexDescriptor> ht;
+                           typename UndirectedGraph<VertexData, EdgeData>::VertexDescriptor> ht;
 
         for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(i);
+            auto desc = g.addVertex(static_cast<VertexData>(i));
             ht.emplace(i, desc);
         }
 
@@ -206,7 +206,7 @@ public:
     template <typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     static auto fromAdjacencyMatrix(const std::vector<std::vector<T>>& matrix)
-        ->std::expected<UndirectedGraph<std::size_t, T>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
     {
         if (matrix.empty())
             return std::unexpected(GraphBuildingError::ZeroSize);
@@ -222,18 +222,18 @@ public:
     }
 
     static auto fromAdjacencyMatrix(const std::vector<bool>& matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
         requires std::is_void_v<EdgeData>
     {
         if (matrix.empty()) return std::unexpected(GraphBuildingError::EmptyVector);
         if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
-        UndirectedGraph<std::size_t, void> g;
-        std::unordered_map<std::size_t,
-                           typename UndirectedGraph<std::size_t, void>::VertexDescriptor> ht;
+        UndirectedGraph<VertexData, void> g;
+        std::unordered_map<VertexData,
+                           typename UndirectedGraph<VertexData, void>::VertexDescriptor> ht;
 
         for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(i);
+            auto desc = g.addVertex(static_cast<VertexData>(i));
             ht.emplace(i, desc);
         }
 
@@ -248,7 +248,7 @@ public:
     }
 
     static auto fromAdjacencyMatrix(const std::vector<std::vector<bool>>& matrix)
-        ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
         requires std::is_void_v<EdgeData>
     {
         if (matrix.empty())

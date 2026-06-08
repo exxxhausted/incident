@@ -1,5 +1,5 @@
-#ifndef EXX_MULTIINDEXEDGRAPHVIEW_HPP
-#define EXX_MULTIINDEXEDGRAPHVIEW_HPP
+#ifndef EXX_MULTIVERTEXINDEXEDVIEW_HPP
+#define EXX_MULTIVERTEXINDEXEDVIEW_HPP
 
 #include <unordered_map>
 #include <ranges>
@@ -12,17 +12,17 @@ namespace exx::incident {
 template<GraphConcept Graph,
          typename Hash = std::hash<typename Graph::VertexValueType>,
          typename KeyEqual = std::equal_to<typename Graph::VertexValueType>>
-class MultiIndexedGraphView {
+class MultiVertexIndexedView {
 public:
     using VertexValueType = typename Graph::VertexValueType;
-    using ConstVertexDescriptor = typename Graph::ConstVertexDescriptor;
+    using VertexDescriptor = typename Graph::VertexDescriptor;
 
-    explicit MultiIndexedGraphView(const Graph& graph) : graph_(&graph)
+    explicit MultiVertexIndexedView(Graph& graph) : graph_(graph)
     { rebuild(); }
 
     void rebuild() {
         index_.clear();
-        for (auto v : graph_->vertices())
+        for (auto v : graph_.vertices())
             index_.emplace(v.data(), v);
     }
 
@@ -45,13 +45,13 @@ public:
     size_t size() const { return index_.size(); }
     bool empty() const  { return index_.empty(); }
 
-    const Graph& graph() const { return *graph_; }
+    Graph& graph() { return graph_; }
 
 private:
-    const Graph* graph_;
-    std::unordered_multimap<VertexValueType, ConstVertexDescriptor, Hash, KeyEqual> index_;
+    Graph& graph_;
+    std::unordered_multimap<VertexValueType, VertexDescriptor, Hash, KeyEqual> index_;
 };
 
 } // namespace exx::incident
 
-#endif // EXX_MULTIINDEXEDGRAPHVIEW_HPP
+#endif // EXX_MULTIVERTEXINDEXEDVIEW_HPP

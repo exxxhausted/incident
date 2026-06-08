@@ -1,18 +1,18 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "incident/undirected/UndirectedPseudoGraph.hpp"
-#include "incident/utility/UniqueIndexedGraphView.hpp"
+#include "incident/utility/UniqueVertexIndexedView.hpp"
 
 using namespace exx::incident;
 using Graph = UndirectedPseudoGraph<std::string, int>;
 
-TEST_CASE("UniqueIndexedGraphView", "[view][unique]") {
+TEST_CASE("UniqueVertexIndexedView", "[view][unique]") {
     Graph g;
     auto vA = g.addVertex("A");
     auto vB = g.addVertex("B");
     auto vC = g.addVertex("C");
 
-    UniqueIndexedGraphView<Graph> view(g);
+    UniqueVertexIndexedView<Graph> view(g);
 
     SECTION("findVertex returns correct descriptor") {
         auto found = view.findVertex("B");

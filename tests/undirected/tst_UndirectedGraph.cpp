@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "incident/undirected/UndirectedGraph.hpp"
-#include "incident/utility/UniqueIndexedGraphView.hpp"
+#include "incident/utility/UniqueVertexIndexedView.hpp"
 
 #include <string>
 #include <cstdlib>
@@ -78,7 +78,7 @@ TEST_CASE("UndirectedGraph unweighted",
 
         auto graphResult = Graph::fromAdjacencyMatrix(mat);
         REQUIRE(graphResult.has_value());
-        auto g = UniqueIndexedGraphView(*graphResult);
+        auto g = UniqueVertexIndexedView(*graphResult);
 
         REQUIRE(g.graph().vertexCount() == 3);
         REQUIRE(g.graph().edgeCount() == 3);
@@ -122,7 +122,7 @@ TEST_CASE("UndirectedGraph weighted",
 
         auto graphResult = Graph::fromAdjacencyMatrix(mat);
         REQUIRE(graphResult.has_value());
-        auto g = UniqueIndexedGraphView(*graphResult);
+        auto g = UniqueVertexIndexedView(*graphResult);
 
         REQUIRE(g.graph().vertexCount() == 3);
         REQUIRE(g.graph().edgeCount() == 2);
@@ -174,7 +174,7 @@ TEST_CASE("UndirectedGraph weighted",
         };
         auto result = Graph::fromAdjacencyMatrix(flat.data(), 3);
         REQUIRE(result.has_value());
-        auto g = UniqueIndexedGraphView(*result);
+        auto g = UniqueVertexIndexedView(*result);
 
         REQUIRE(g.graph().edgeCount() == 2);
         REQUIRE(g.graph().findEdge(*g.findVertex(0), *g.findVertex(1))->data() == 1.5);

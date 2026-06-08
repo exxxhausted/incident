@@ -7,6 +7,7 @@
 #include <expected>
 
 #include "../undirected/UndirectedGraph.hpp"
+#include "../details/graph_concepts.hpp"
 
 namespace exx::incident {
 
@@ -21,13 +22,14 @@ inline std::string to_string(PrimError e) {
     }
 }
 
-template<typename VertexData,
-         typename EdgeData>
-    requires std::is_copy_constructible_v<EdgeData>
-auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
-    -> std::expected<UndirectedGraph<VertexData, EdgeData>, PrimError>
+template<UndirectedGraphConcept G>
+    requires std::is_copy_constructible_v<typename G::EdgeValueType>
+auto mstPrim(const G& graph)
+    -> std::expected<UndirectedGraph<typename G::VertexValueType,
+                                     typename G::EdgeValueType>, PrimError>
 {
-    using GraphType = UndirectedGraph<VertexData, EdgeData>;
+    using GraphType = UndirectedGraph<typename G::VertexValueType,
+                                      typename G::EdgeValueType>;
     using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
     using VertexDesc = typename GraphType::VertexDescriptor;
 
@@ -42,7 +44,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
     }
 
     struct QueueElement {
-        EdgeData weight;
+        typename G::EdgeValueType weight;
         ConstVertexDesc vertex;
         ConstVertexDesc parent;
     };
