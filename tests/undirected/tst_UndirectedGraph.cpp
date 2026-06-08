@@ -157,7 +157,7 @@ TEST_CASE("UndirectedGraph weighted",
 
         auto nullResult = Graph::fromAdjacencyMatrix(std::vector<bool>{}, 5);
         REQUIRE_FALSE(nullResult.has_value());
-        REQUIRE(nullResult.error() == GraphBuildingError::NullPointer);
+        REQUIRE(nullResult.error() == GraphBuildingError::EmptyVector);
 
         auto zeroResult = Graph::fromAdjacencyMatrix(flat, 0);
         REQUIRE_FALSE(zeroResult.has_value());

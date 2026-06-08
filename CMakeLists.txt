@@ -20,14 +20,3 @@ if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
-
-option(BUILD_SINGLE_HEADER "Generate single-header version" OFF)
-if(BUILD_SINGLE_HEADER)
-    set(INCIDENT_MAIN_HEADER "${CMAKE_SOURCE_DIR}/include/incident/incident.hpp")
-    set(SINGLE_HEADER_OUTPUT "${CMAKE_SOURCE_DIR}/single_include/incident.hpp")
-
-    add_custom_target(single_header ALL
-        COMMAND quom ${INCIDENT_MAIN_HEADER} ${SINGLE_HEADER_OUTPUT}
-        COMMENT "Generating single-header: ${SINGLE_HEADER_OUTPUT}"
-    )
-endif()

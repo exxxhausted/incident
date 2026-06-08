@@ -113,13 +113,13 @@ private:
 
         template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
+            std::unordered_set<VertexDescriptor> unique;
+            for (const auto& e : incidentEdges()) {
+                auto other = e.otherEnd(*this);
+                if (other) unique.insert(*other);
+            }
 
-            std::unordered_set<VertexDescriptorImpl> seen;
-            auto uniqueRange = incidentEdges()
-                               | std::views::transform([this](const auto& edge) { return *edge.otherEnd(*this); })
-                               | std::views::filter([&seen](const VertexDescriptorImpl& v) { return seen.insert(v).second; });
-
-            std::vector<VertexDescriptorImpl> res(uniqueRange.begin(), uniqueRange.end());
+            std::vector<VertexDescriptor> res(unique.begin(), unique.end());
 
             if constexpr(!std::is_void_v<Cmp>)
                 std::ranges::sort(res, [](const auto& a, const auto& b) { return Cmp{}(a.data(), b.data()); });
