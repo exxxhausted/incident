@@ -814,17 +814,17 @@ public:
     template <typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     static auto fromAdjacencyMatrix(const T* matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<std::size_t, T>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
     {
         if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
         if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
-        UndirectedGraph<std::size_t, EdgeData> g;
+        UndirectedGraph<VertexData, EdgeData> g;
         std::unordered_map<std::size_t,
-                           typename UndirectedGraph<std::size_t, EdgeData>::VertexDescriptor> ht;
+                           typename UndirectedGraph<VertexData, EdgeData>::VertexDescriptor> ht;
 
         for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(i);
+            auto desc = g.addVertex(static_cast<VertexData>(i));
             ht.emplace(i, desc);
         }
 
@@ -842,7 +842,7 @@ public:
     template <typename T = EdgeData>
         requires (!std::is_void_v<EdgeData>)
     static auto fromAdjacencyMatrix(const std::vector<std::vector<T>>& matrix)
-        ->std::expected<UndirectedGraph<std::size_t, T>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
     {
         if (matrix.empty())
             return std::unexpected(GraphBuildingError::ZeroSize);
@@ -858,18 +858,18 @@ public:
     }
 
     static auto fromAdjacencyMatrix(const std::vector<bool>& matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
         requires std::is_void_v<EdgeData>
     {
         if (matrix.empty()) return std::unexpected(GraphBuildingError::EmptyVector);
         if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
 
-        UndirectedGraph<std::size_t, void> g;
-        std::unordered_map<std::size_t,
-                           typename UndirectedGraph<std::size_t, void>::VertexDescriptor> ht;
+        UndirectedGraph<VertexData, void> g;
+        std::unordered_map<VertexData,
+                           typename UndirectedGraph<VertexData, void>::VertexDescriptor> ht;
 
         for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(i);
+            auto desc = g.addVertex(static_cast<VertexData>(i));
             ht.emplace(i, desc);
         }
 
@@ -884,7 +884,7 @@ public:
     }
 
     static auto fromAdjacencyMatrix(const std::vector<std::vector<bool>>& matrix)
-        ->std::expected<UndirectedGraph<std::size_t, void>, GraphBuildingError>
+        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
         requires std::is_void_v<EdgeData>
     {
         if (matrix.empty())
@@ -931,6 +931,98 @@ private:
 #include <vector>
 #include <expected>
 
+
+/*** Start of inlined file: graph_concepts.hpp ***/
+#ifndef EXX_GRAPHCONCEPTS_HPP
+#define EXX_GRAPHCONCEPTS_HPP
+
+#include <concepts>
+#include <ranges>
+
+namespace exx::incident {
+
+template<typename G>
+concept GraphConcept = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
+    typename G::VertexValueType;
+    typename G::VertexDescriptor;
+    typename G::ConstVertexDescriptor;
+
+    requires std::copyable<typename G::VertexDescriptor>;
+    requires std::equality_comparable<typename G::VertexDescriptor>;
+    requires std::convertible_to<typename G::VertexDescriptor, typename G::ConstVertexDescriptor>;
+
+    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
+
+    { g.vertices() } -> std::ranges::range;
+    { cg.vertices() } -> std::ranges::range;
+
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(g.vertices())>,
+        typename G::VertexDescriptor
+        >;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(cg.vertices())>,
+        typename G::ConstVertexDescriptor
+        >;
+
+    typename G::VertexIterator;
+    typename G::ConstVertexIterator;
+
+    { g.beginVertices() } -> std::forward_iterator;
+    { g.endVertices() }   -> std::forward_iterator;
+    { cg.beginVertices() } -> std::forward_iterator;
+    { cg.endVertices() }   -> std::forward_iterator;
+
+    { g.vertexCount() } -> std::integral;
+    { cg.vertexCount() } -> std::integral;
+};
+
+template<typename G>
+concept UndirectedGraphConcept = GraphConcept<G> &&
+                                 requires(G& g, const G& cg, typename G::EdgeDescriptor e)
+{
+    typename G::EdgeValueType;
+    typename G::EdgeDescriptor;
+    typename G::ConstEdgeDescriptor;
+
+    requires std::copyable<typename G::EdgeDescriptor>;
+    requires std::equality_comparable<typename G::EdgeDescriptor>;
+    requires std::convertible_to<typename G::EdgeDescriptor, typename G::ConstEdgeDescriptor>;
+
+    { e.data() } -> std::convertible_to<const typename G::EdgeValueType&>;
+    { e.u() } -> std::convertible_to<typename G::ConstVertexDescriptor>;
+    { e.v() } -> std::convertible_to<typename G::ConstVertexDescriptor>;
+
+    { g.edges() } -> std::ranges::range;
+    { cg.edges() } -> std::ranges::range;
+
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(g.edges())>,
+        typename G::EdgeDescriptor
+        >;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(cg.edges())>,
+        typename G::ConstEdgeDescriptor
+        >;
+
+    typename G::EdgeIterator;
+    typename G::ConstEdgeIterator;
+
+    { g.beginEdges() } -> std::forward_iterator;
+    { g.endEdges() }   -> std::forward_iterator;
+    { cg.beginEdges() } -> std::forward_iterator;
+    { cg.endEdges() }   -> std::forward_iterator;
+
+    { g.edgeCount() } -> std::integral;
+    { cg.edgeCount() } -> std::integral;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_GRAPHCONCEPTS_HPP
+
+/*** End of inlined file: graph_concepts.hpp ***/
+
 namespace exx::incident {
 
 enum class PrimError {
@@ -944,13 +1036,14 @@ inline std::string to_string(PrimError e) {
     }
 }
 
-template<typename VertexData,
-         typename EdgeData>
-    requires std::is_copy_constructible_v<EdgeData>
-auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
-    -> std::expected<UndirectedGraph<VertexData, EdgeData>, PrimError>
+template<UndirectedGraphConcept G>
+    requires std::is_copy_constructible_v<typename G::EdgeValueType>
+auto mstPrim(const G& graph)
+    -> std::expected<UndirectedGraph<typename G::VertexValueType,
+                                     typename G::EdgeValueType>, PrimError>
 {
-    using GraphType = UndirectedGraph<VertexData, EdgeData>;
+    using GraphType = UndirectedGraph<typename G::VertexValueType,
+                                      typename G::EdgeValueType>;
     using ConstVertexDesc = typename GraphType::ConstVertexDescriptor;
     using VertexDesc = typename GraphType::VertexDescriptor;
 
@@ -965,7 +1058,7 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
     }
 
     struct QueueElement {
-        EdgeData weight;
+        typename G::EdgeValueType weight;
         ConstVertexDesc vertex;
         ConstVertexDesc parent;
     };
@@ -1016,83 +1109,16 @@ auto mstPrim(const UndirectedGraph<VertexData, EdgeData>& graph)
 /*** End of inlined file: mstPrim.hpp ***/
 
 
-/*** Start of inlined file: bfsUndirected.hpp ***/
-#ifndef EXX_BFSUNDIRECTED_HPP
-#define EXX_BFSUNDIRECTED_HPP
+/*** Start of inlined file: bfs.hpp ***/
+#ifndef EXX_BFS_HPP
+#define EXX_BFS_HPP
 
 #include <queue>
 #include <unordered_set>
 
-
-/*** Start of inlined file: graph_concepts.hpp ***/
-#ifndef EXX_GRAPHCONCEPTS_HPP
-#define EXX_GRAPHCONCEPTS_HPP
-
-#include <concepts>
-#include <ranges>
-
 namespace exx::incident {
 
-template<typename G>
-concept GraphConcept = requires(G& g, const G& cg, typename G::VertexDescriptor v) {
-    typename G::VertexValueType;
-    typename G::EdgeValueType;
-
-    typename G::VertexDescriptor;
-
-    requires std::copyable<typename G::VertexDescriptor>;
-    requires std::equality_comparable<typename G::VertexDescriptor>;
-
-    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
-
-    { g.vertices() } -> std::ranges::range;
-    { cg.vertices() } -> std::ranges::range;
-
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(g.vertices())>,
-        typename G::VertexDescriptor
-        >;
-};
-
-template<typename G>
-concept TraversableGraph = requires(G& g, const G& cg, typename G::VertexDescriptor v, typename G::ConstVertexDescriptor cv) {
-    typename G::VertexValueType;
-    typename G::VertexDescriptor;
-    typename G::ConstVertexDescriptor;
-    typename G::VertexIterator;
-    typename G::ConstVertexIterator;
-
-    { g.beginVertices() } -> std::forward_iterator;
-    { g.endVertices() }   -> std::forward_iterator;
-
-    { cg.beginVertices() } -> std::forward_iterator;
-    { cg.endVertices() }   -> std::forward_iterator;
-
-    { g.vertexCount() } -> std::integral;
-    { cg.vertexCount() } -> std::integral;
-
-    { v.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(v.adjacentVertices())>,
-        typename G::VertexDescriptor
-        >;
-
-    { cv.adjacentVertices() } -> std::ranges::forward_range;
-    requires std::convertible_to<
-        std::ranges::range_reference_t<decltype(cv.adjacentVertices())>,
-        typename G::ConstVertexDescriptor
-        >;
-};
-
-} // namespace exx::incident
-
-#endif // EXX_GRAPHCONCEPTS_HPP
-
-/*** End of inlined file: graph_concepts.hpp ***/
-
-namespace exx::incident {
-
-template<TraversableGraph Graph,
+template<GraphConcept Graph,
          typename Cmp = std::less<typename Graph::VertexValueType>>
 auto bfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
@@ -1125,14 +1151,14 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 
 } // namespace exx::incident
 
-#endif // EXX_BFSUNDIRECTED_HPP
+#endif // EXX_BFS_HPP
 
-/*** End of inlined file: bfsUndirected.hpp ***/
+/*** End of inlined file: bfs.hpp ***/
 
 
-/*** Start of inlined file: dfsUndirected.hpp ***/
-#ifndef EXX_DFSUNDIRECTED_HPP
-#define EXX_DFSUNDIRECTED_HPP
+/*** Start of inlined file: dfs.hpp ***/
+#ifndef EXX_DFS_HPP
+#define EXX_DFS_HPP
 
 #include <vector>
 #include <stack>
@@ -1140,7 +1166,7 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 
 namespace exx::incident {
 
-template<TraversableGraph Graph,
+template<GraphConcept Graph,
          typename Cmp = std::less<typename Graph::VertexValueType>>
 auto dfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
@@ -1172,9 +1198,9 @@ auto dfs(Graph& G, typename Graph::VertexDescriptor start)
 
 } // namespace exx::incident
 
-#endif // EXX::DFSUNDIRECTED_HPP
+#endif // EXX_DFS_HPP
 
-/*** End of inlined file: dfsUndirected.hpp ***/
+/*** End of inlined file: dfs.hpp ***/
 
 #endif // EXX_ALGORITHMS_HPP
 

@@ -25,6 +25,33 @@ public:
             index_.emplace(v.data(), v);
     }
 
+    template<typename... Args>
+    VertexDescriptor emlaceVertex(Args&&... args) {
+        auto v = graph_.emplaceVertex(std::forward<Args>(args)...);
+        index_.emplace(v.data(), v);
+        return v;
+    }
+
+    VertexDescriptor addVertex(const Graph::VertexValueType& data)
+    { return emplaceVertex(data); }
+
+    void removeVertex(VertexDescriptor v) {
+        index_.erase(v.data());
+        graph_.removeVertex(v);
+    }
+
+    void setVertexData(VertexDescriptor v, const VertexValueType& newData) {
+        index_.erase(v.data());
+        v.data() = newData;
+        index_.emplace(newData, v);
+    }
+
+    void setVertexData(VertexDescriptor v, VertexValueType&& newData) {
+        index_.erase(v.data());
+        v.data() = std::move(newData);
+        index_.emplace(v.data(), v);
+    }
+
     std::optional<VertexDescriptor> findVertex(const VertexValueType& key) const {
         auto it = index_.find(key);
         if (it != index_.end()) return it->second;
