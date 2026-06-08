@@ -15,6 +15,9 @@ namespace exx::incident {
 
 template<typename VertexData, typename EdgeData>
 class UndirectedPseudoGraph {
+
+    static_assert(!std::is_void_v<VertexData>, "VertexData cannot be void");
+
 private:
     struct Vertex;
     struct Edge;
@@ -27,7 +30,9 @@ private:
     using EdgeConstLabel   = typename EdgeList::const_iterator;
 
     struct EmptyEdgeData final {};
-    using ConditionalEdgeData = std::conditional_t<std::is_void_v<EdgeData>, EmptyEdgeData, EdgeData>;
+    using ConditionalEdgeData = std::conditional_t<std::is_void_v<EdgeData>,
+                                                   EmptyEdgeData,
+                                                   EdgeData>;
 
     struct EraseAccelerationMetaData {
         typename std::list<EdgeLabel>::iterator _posInV1{};
@@ -66,6 +71,7 @@ private:
     template<bool isConst> class EdgeDescriptorImpl;
 
 public:
+
     struct EdgeDescriptorHash {
         template<bool isConst>
         std::size_t operator()(const EdgeDescriptorImpl<isConst>& desc) const
@@ -83,7 +89,9 @@ private:
     template<bool isConst>
     class VertexDescriptorImpl {
     private:
-        using ConditionalVertexLabel = std::conditional_t<isConst, VertexConstLabel, VertexLabel>;
+        using ConditionalVertexLabel = std::conditional_t<isConst,
+                                                          VertexConstLabel,
+                                                          VertexLabel>;
 
         ConditionalVertexLabel _label;
 
@@ -94,9 +102,11 @@ private:
         VertexDescriptorImpl(const VertexDescriptorImpl&) = default;
         VertexDescriptorImpl& operator=(const VertexDescriptorImpl&) = default;
 
-        explicit VertexDescriptorImpl(ConditionalVertexLabel label) : _label(label) {}
+        explicit VertexDescriptorImpl(ConditionalVertexLabel label)
+            : _label(label) {}
 
-        VertexDescriptorImpl(const VertexDescriptorImpl<false>& other) requires isConst
+        VertexDescriptorImpl(const VertexDescriptorImpl<false>& other)
+            requires isConst
             : _label(other._label) {}
 
         auto& data()       requires (!isConst) { return _label->_data; }
@@ -109,23 +119,24 @@ private:
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
-        std::vector<VertexDescriptorImpl> unorderedAdjV() const { return adjacentVertices<void>(); }
-
         template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (const auto& e : incidentEdges()) {
                 auto other = e.otherEnd(*this);
-                if (other) unique.insert(*other);
+                unique.insert(*other);
             }
 
             std::vector<VertexDescriptor> res(unique.begin(), unique.end());
 
             if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b) { return Cmp{}(a.data(), b.data()); });
+                std::ranges::sort(res, [](const auto& a, const auto& b)
+                                  { return Cmp{}(a.data(), b.data()); });
 
             return res;
         }
+
+        std::vector<VertexDescriptorImpl> unorderedAdjV() const { return adjacentVertices<void>(); }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
@@ -136,7 +147,9 @@ private:
     template<bool isConst>
     class EdgeDescriptorImpl {
     private:
-        using ConditionalEdgeLabel = std::conditional_t<isConst, EdgeConstLabel, EdgeLabel>;
+        using ConditionalEdgeLabel = std::conditional_t<isConst,
+                                                        EdgeConstLabel,
+                                                        EdgeLabel>;
 
         ConditionalEdgeLabel _label;
 
@@ -158,7 +171,9 @@ private:
         VertexDescriptorImpl<isConst> v() const { return VertexDescriptorImpl<isConst>(_label->_v1); }
         VertexDescriptorImpl<isConst> u() const { return VertexDescriptorImpl<isConst>(_label->_v2); }
 
-        std::optional<VertexDescriptorImpl<isConst>> otherEnd(const VertexDescriptorImpl<isConst>& vertex) const {
+        auto otherEnd(const VertexDescriptorImpl<isConst>& vertex) const
+            ->std::optional<VertexDescriptorImpl<isConst>>
+        {
             if (vertex._label == _label->_v1)
                 return VertexDescriptorImpl<isConst>(_label->_v2);
             else if (vertex._label == _label->_v2)
@@ -176,7 +191,9 @@ private:
     template<bool isConst>
     class VertexIteratorImpl {
     private:
-        using ConditionalVertexLabel = std::conditional_t<isConst, VertexConstLabel, VertexLabel>;
+        using ConditionalVertexLabel = std::conditional_t<isConst,
+                                                          VertexConstLabel,
+                                                          VertexLabel>;
 
         ConditionalVertexLabel _it;
 
@@ -210,7 +227,9 @@ private:
     template<bool isConst>
     class EdgeIteratorImpl {
     private:
-        using ConditionalEdgeLabel = std::conditional_t<isConst, EdgeConstLabel, EdgeLabel>;
+        using ConditionalEdgeLabel = std::conditional_t<isConst,
+                                                        EdgeConstLabel,
+                                                        EdgeLabel>;
 
         ConditionalEdgeLabel _it;
 
