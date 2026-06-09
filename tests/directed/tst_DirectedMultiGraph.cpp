@@ -2,7 +2,6 @@
 
 #include "incident/directed/DirectedMultiGraph.hpp"
 
-#include <string>
 #include <cstdlib>
 
 using namespace exx::incident;
@@ -39,15 +38,15 @@ void requireValidDirectedGraph(const Graph& g) {
 }
 
 TEST_CASE("DirectedMultiGraph unweighted",
-          "[directed][multigraph][unweighted]")
+          "[directed][multigraph][unweighted vertices][unweighted edges]")
 {
-    using Graph = DirectedMultiGraph<std::string, void>;
+    using Graph = DirectedMultiGraph<void, void>;
 
     SECTION("Multi graph specific befavior") {
         Graph g;
 
-        auto a = g.addVertex("A");
-        auto b = g.addVertex("B");
+        auto a = g.addVertex();
+        auto b = g.addVertex();
         SECTION("No self-loops") {
             auto loop = g.addArc(a, a);
 

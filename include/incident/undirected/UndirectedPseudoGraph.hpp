@@ -15,9 +15,6 @@ namespace exx::incident {
 
 template<typename VertexData, typename EdgeData>
 class UndirectedPseudoGraph {
-
-    static_assert(!std::is_void_v<VertexData>, "VertexData cannot be void");
-
 private:
     struct Vertex;
     struct Edge;
@@ -29,10 +26,14 @@ private:
     using EdgeLabel        = typename EdgeList::iterator;
     using EdgeConstLabel   = typename EdgeList::const_iterator;
 
-    struct EmptyEdgeData final {};
+    struct EmptyData final {};
     using ConditionalEdgeData = std::conditional_t<std::is_void_v<EdgeData>,
-                                                   EmptyEdgeData,
+                                                   EmptyData,
                                                    EdgeData>;
+    using ConditionalVertexData = std::conditional_t<std::is_void_v<VertexData>,
+                                                     EmptyData,
+                                                     VertexData>;
+
 
     struct EraseAccelerationMetaData {
         typename std::list<EdgeLabel>::iterator _posInV1{};
@@ -46,7 +47,8 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-        Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
+            requires std::constructible_from<ConditionalEdgeData, Args...>
+        explicit Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
             : _v1(v1), _v2(v2)
         {
             if constexpr (!std::is_void_v<EdgeData>)
@@ -59,9 +61,17 @@ private:
 
     struct Vertex {
         std::list<EdgeLabel> _incidentEdges;
-        VertexData _data;
+        [[no_unique_address]] ConditionalVertexData _data;
+
         template<typename... Args>
-        explicit Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
+            requires std::constructible_from<ConditionalVertexData, Args...>
+        explicit Vertex(Args&&... args) {
+            if constexpr (!std::is_void_v<VertexData>)
+                _data = ConditionalVertexData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "VertexData is void, cannot pass data to edge");
+        }
     };
 
     VertexList _vertices;
@@ -109,8 +119,8 @@ private:
             requires isConst
             : _label(other._label) {}
 
-        auto& data()       requires (!isConst) { return _label->_data; }
-        const auto& data() const               { return _label->_data; }
+        auto& data()       requires (!isConst && !std::is_void_v<VertexData>) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<VertexData>) { return _label->_data; }
 
         std::size_t degree() const { return _label->_incidentEdges.size(); }
 
@@ -119,24 +129,14 @@ private:
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
-        template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (const auto& e : incidentEdges()) {
                 auto other = e.otherEnd(*this);
                 unique.insert(*other);
             }
-
-            std::vector<VertexDescriptor> res(unique.begin(), unique.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b)
-                                  { return Cmp{}(a.data(), b.data()); });
-
-            return res;
+            return std::vector<VertexDescriptor>(unique.begin(), unique.end());
         }
-
-        std::vector<VertexDescriptorImpl> unorderedAdjV() const { return adjacentVertices<void>(); }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
@@ -281,7 +281,13 @@ public:
         std::unordered_map<const Vertex*, VertexDescriptor> origToNew;
 
         for (const auto& origVertex : other._vertices) {
-            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            VertexDescriptor newV;
+
+            if constexpr (std::is_void_v<VertexData>)
+                newV = emplaceVertex();
+            else
+                newV = emplaceVertex(origVertex._data);
+
             origToNew[&origVertex] = newV;
         }
 
@@ -313,8 +319,14 @@ public:
         return VertexDescriptor(it);
     }
 
-    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
-    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return emplaceVertex(std::forward<T>(data)); }
+
+    VertexDescriptor addVertex()
+        requires (std::is_void_v<VertexData>)
+    { return emplaceVertex(); }
 
     void removeVertex(VertexDescriptor vertex) {
         auto incidentCopy = vertex._label->_incidentEdges;
@@ -408,11 +420,6 @@ public:
 
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
-
-    bool hasVertex(const VertexData& data) const {
-        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
-        return it != vertices().end();
-    }
 
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())

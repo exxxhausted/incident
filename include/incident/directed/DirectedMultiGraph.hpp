@@ -44,11 +44,14 @@ public:
     VertexDescriptor emplaceVertex(Args&&... args)
     { return _pseudoGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    VertexDescriptor addVertex(const VertexData& data)
-    { return _pseudoGraph.addVertex(data); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return _pseudoGraph.addVertex(std::forward<T>(data)); }
 
-    VertexDescriptor addVertex(VertexData&& data)
-    { return _pseudoGraph.addVertex(std::move(data)); }
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return _pseudoGraph.addVertex(); }
 
     void removeVertex(VertexDescriptor v)
     { _pseudoGraph.removeVertex(v); }
@@ -115,7 +118,7 @@ public:
 
     bool empty() const { return _pseudoGraph.empty(); }
 
-    bool roteteArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
+    bool rotateArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
 
 private:
 

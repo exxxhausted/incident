@@ -2,11 +2,8 @@
 #define EXX_UNDIRECTEDGRAPH_HPP
 
 #include <optional>
-#include <expected>
 
 #include "UndirectedMultiGraph.hpp"
-#include "../details/Matrix.hpp"
-#include "../details/errors.hpp"
 
 namespace exx::incident {
 
@@ -47,11 +44,14 @@ public:
     VertexDescriptor emplaceVertex(Args&&... args)
     { return _multiGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    VertexDescriptor addVertex(const VertexData& data)
-    { return _multiGraph.addVertex(data); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return _multiGraph.addVertex(std::forward<T>(data)); }
 
-    VertexDescriptor addVertex(VertexData&& data)
-    { return _multiGraph.addVertex(std::move(data)); }
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return _multiGraph.addVertex(); }
 
     void removeVertex(VertexDescriptor v) { _multiGraph.removeVertex(v); }
 
@@ -117,135 +117,6 @@ public:
     void clear() { _multiGraph.clear(); }
 
     bool empty() const { return _multiGraph.empty(); }
-
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    Matrix<T> toAdjacencyMatrix(T default_value = T{}) const {
-        const std::size_t n = vertexCount();
-        Matrix<T> mat(n, n);
-
-        for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j)
-                mat(i, j) = default_value;
-
-        for (auto v : vertices()) {
-            for (auto e : v.incidentEdges()) {
-                auto u = *e.otherEnd(v);
-                mat(v.data(), u.data()) = e.data();
-                mat(u.data(), v.data()) = e.data();
-            }
-        }
-        return mat;
-    }
-
-    Matrix<bool> toAdjacencyMatrix() const
-        requires std::is_void_v<EdgeData>
-    {
-        const std::size_t n = vertexCount();
-        Matrix<bool> mat(n, n);
-
-        for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j)
-                mat(i, j) = false;
-
-        for (auto v : vertices()) {
-            for (auto e : v.incidentEdges()) {
-                auto u = *e.otherEnd(v);
-                mat(v.data(), u.data()) = true;
-                mat(u.data(), v.data()) = true;
-            }
-        }
-        return mat;
-    }
-
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    static auto fromAdjacencyMatrix(const T* matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
-    {
-        if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
-        if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
-
-        UndirectedGraph<VertexData, EdgeData> g;
-        std::unordered_map<std::size_t,
-                           typename UndirectedGraph<VertexData, EdgeData>::VertexDescriptor> ht;
-
-        for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(static_cast<VertexData>(i));
-            ht.emplace(i, desc);
-        }
-
-        for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t j = i + 1; j < n; ++j) {
-                auto val = matrix[i * n + j];
-                if (val != EdgeData{})
-                    g.addEdge(ht[i], ht[j], val);
-            }
-        }
-
-        return g;
-    }
-
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    static auto fromAdjacencyMatrix(const std::vector<std::vector<T>>& matrix)
-        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
-    {
-        if (matrix.empty())
-            return std::unexpected(GraphBuildingError::ZeroSize);
-
-        std::size_t n = matrix.size();
-        std::vector<EdgeData> flat;
-        flat.reserve(n * n);
-        for (const auto& row : matrix) {
-            if (row.size() != n) return std::unexpected(GraphBuildingError::NonSquareMatrix);
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
-        return fromAdjacencyMatrix<EdgeData>(flat.data(), n);
-    }
-
-    static auto fromAdjacencyMatrix(const std::vector<bool>& matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
-        requires std::is_void_v<EdgeData>
-    {
-        if (matrix.empty()) return std::unexpected(GraphBuildingError::EmptyVector);
-        if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
-
-        UndirectedGraph<VertexData, void> g;
-        std::unordered_map<VertexData,
-                           typename UndirectedGraph<VertexData, void>::VertexDescriptor> ht;
-
-        for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(static_cast<VertexData>(i));
-            ht.emplace(i, desc);
-        }
-
-        for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t j = i + 1; j < n; ++j) {
-                auto val = matrix[i * n + j];
-                if (val) g.addEdge(ht[i], ht[j]);
-            }
-        }
-
-        return g;
-    }
-
-    static auto fromAdjacencyMatrix(const std::vector<std::vector<bool>>& matrix)
-        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
-        requires std::is_void_v<EdgeData>
-    {
-        if (matrix.empty())
-            return std::unexpected(GraphBuildingError::ZeroSize);
-
-        std::size_t n = matrix.size();
-        std::vector<bool> flat;
-        flat.reserve(n * n);
-        for (const auto& row : matrix) {
-            if (row.size() != n) return std::unexpected(GraphBuildingError::NonSquareMatrix);
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
-        return fromAdjacencyMatrix(flat, n);
-    }
 
 private:
 

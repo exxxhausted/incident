@@ -14,9 +14,6 @@ namespace exx::incident {
 
 template<typename VertexData, typename ArcData>
 class DirectedPseudoGraph {
-
-    static_assert(!std::is_void_v<VertexData>, "VertexData cannot be void");
-
 private:
     struct Vertex;
     struct Arc;
@@ -28,10 +25,13 @@ private:
     using ArcLabel         = typename ArcList::iterator;
     using ArcConstLabel    = typename ArcList::const_iterator;
 
-    struct EmptyArcData final {};
+    struct EmptyData final {};
     using ConditionalArcData = std::conditional_t<std::is_void_v<ArcData>,
-                                                  EmptyArcData,
+                                                  EmptyData,
                                                   ArcData>;
+    using ConditionalVertexData = std::conditional_t<std::is_void_v<VertexData>,
+                                                     EmptyData,
+                                                     VertexData>;
 
     struct EraseAccelerationMetaData {
         typename std::list<ArcLabel>::iterator _posInFrom{};
@@ -45,6 +45,7 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
+            requires std::constructible_from<ConditionalArcData, Args...>
         Arc(VertexLabel from, VertexLabel to, Args&&... args)
             : _from(from), _to(to)
         {
@@ -59,9 +60,17 @@ private:
     struct Vertex {
         std::list<ArcLabel> _outgoingArcs;
         std::list<ArcLabel> _incomingArcs;
-        VertexData _data;
+        [[no_unique_address]] ConditionalVertexData _data;
+
         template<typename... Args>
-        explicit Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
+            requires std::constructible_from<ConditionalVertexData, Args...>
+        explicit Vertex(Args&&... args) {
+            if constexpr (!std::is_void_v<VertexData>)
+                _data = ConditionalVertexData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "VertexData is void, cannot pass data to vertex");
+        }
     };
 
     VertexList _vertices;
@@ -109,8 +118,8 @@ private:
             requires isConst
             : _label(other._label) {}
 
-        auto& data()       requires (!isConst) { return _label->_data; }
-        const auto& data() const               { return _label->_data; }
+        auto& data()       requires (!isConst && !std::is_void_v<VertexData>) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<VertexData>) { return _label->_data; }
 
         std::size_t outDegree() const { return _label->_outgoingArcs.size(); }
         std::size_t inDegree() const { return _label->_incomingArcs.size(); }
@@ -125,41 +134,22 @@ private:
                                          [](const ArcLabel& al) { return ArcDescriptorImpl<isConst>(al); });
         }
 
-        template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
             std::unordered_set<VertexDescriptorImpl> unique;
             for (auto e : outgoingArcs()) {
                 auto other = e.followArcDirection(*this);
                 unique.insert(*other);
             }
-
-            std::vector<VertexDescriptorImpl> res(unique.begin(), unique.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b)
-                                  { return Cmp{}(a.data(), b.data()); });
-
-            return res;
+            return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
-        std::vector<VertexDescriptorImpl> unorderedOutV() const { return adjacentVertices<void>(); }
-
-        template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> incomingVertices() const {
             std::unordered_set<VertexDescriptorImpl> unique;
             for (auto a : incomingArcs())
                 unique.insert(a.from());
 
-            std::vector<VertexDescriptorImpl> res(unique.begin(), unique.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b)
-                                  { return Cmp{}(a.data(), b.data()); });
-
-            return res;
+            return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
-
-        std::vector<VertexDescriptorImpl> unorderedInV() const { return incomingVertices<void>(); }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
@@ -313,7 +303,13 @@ public:
         std::unordered_map<const Vertex*, VertexDescriptor> origToNew;
 
         for (const auto& origVertex : other._vertices) {
-            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            VertexDescriptor newV;
+
+            if constexpr (std::is_void_v<VertexData>)
+                newV = emplaceVertex();
+            else
+                newV = emplaceVertex(origVertex._data);
+
             origToNew[&origVertex] = newV;
         }
 
@@ -345,8 +341,14 @@ public:
         return VertexDescriptor(it);
     }
 
-    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
-    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return emplaceVertex(std::forward<T>(data)); }
+
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return emplaceVertex(); }
 
     void removeVertex(VertexDescriptor vertex) {
         auto outgoingArcsCopy = vertex._label->_outgoingArcs;
@@ -445,11 +447,6 @@ public:
 
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t arcCount() const { return _arcs.size(); }
-
-    bool hasVertex(const VertexData& data) const {
-        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
-        return it != vertices().end();
-    }
 
     std::optional<ArcDescriptor> findArc(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.outgoingArcs())

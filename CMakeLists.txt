@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(Incident
-    VERSION 0.3.0
+    VERSION 0.1.0
     LANGUAGES CXX)
 
 add_library(incident INTERFACE)

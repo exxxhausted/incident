@@ -12,7 +12,6 @@
 #define EXX_UNDIRECTEDGRAPH_HPP
 
 #include <optional>
-#include <expected>
 
 
 /*** Start of inlined file: UndirectedMultiGraph.hpp ***/
@@ -72,9 +71,6 @@ namespace exx::incident {
 
 template<typename VertexData, typename EdgeData>
 class UndirectedPseudoGraph {
-
-    static_assert(!std::is_void_v<VertexData>, "VertexData cannot be void");
-
 private:
     struct Vertex;
     struct Edge;
@@ -86,10 +82,13 @@ private:
     using EdgeLabel        = typename EdgeList::iterator;
     using EdgeConstLabel   = typename EdgeList::const_iterator;
 
-    struct EmptyEdgeData final {};
+    struct EmptyData final {};
     using ConditionalEdgeData = std::conditional_t<std::is_void_v<EdgeData>,
-                                                   EmptyEdgeData,
+                                                   EmptyData,
                                                    EdgeData>;
+    using ConditionalVertexData = std::conditional_t<std::is_void_v<VertexData>,
+                                                     EmptyData,
+                                                     VertexData>;
 
     struct EraseAccelerationMetaData {
         typename std::list<EdgeLabel>::iterator _posInV1{};
@@ -103,7 +102,8 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
-        Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
+            requires std::constructible_from<ConditionalEdgeData, Args...>
+        explicit Edge(VertexLabel v1, VertexLabel v2, Args&&... args)
             : _v1(v1), _v2(v2)
         {
             if constexpr (!std::is_void_v<EdgeData>)
@@ -116,9 +116,17 @@ private:
 
     struct Vertex {
         std::list<EdgeLabel> _incidentEdges;
-        VertexData _data;
+        [[no_unique_address]] ConditionalVertexData _data;
+
         template<typename... Args>
-        explicit Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
+            requires std::constructible_from<ConditionalVertexData, Args...>
+        explicit Vertex(Args&&... args) {
+            if constexpr (!std::is_void_v<VertexData>)
+                _data = ConditionalVertexData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "VertexData is void, cannot pass data to edge");
+        }
     };
 
     VertexList _vertices;
@@ -166,8 +174,8 @@ private:
             requires isConst
             : _label(other._label) {}
 
-        auto& data()       requires (!isConst) { return _label->_data; }
-        const auto& data() const               { return _label->_data; }
+        auto& data()       requires (!isConst && !std::is_void_v<VertexData>) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<VertexData>) { return _label->_data; }
 
         std::size_t degree() const { return _label->_incidentEdges.size(); }
 
@@ -176,24 +184,14 @@ private:
                                          [](const EdgeLabel& el) { return EdgeDescriptorImpl<isConst>(el); });
         }
 
-        template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (const auto& e : incidentEdges()) {
                 auto other = e.otherEnd(*this);
                 unique.insert(*other);
             }
-
-            std::vector<VertexDescriptor> res(unique.begin(), unique.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b)
-                                  { return Cmp{}(a.data(), b.data()); });
-
-            return res;
+            return std::vector<VertexDescriptor>(unique.begin(), unique.end());
         }
-
-        std::vector<VertexDescriptorImpl> unorderedAdjV() const { return adjacentVertices<void>(); }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
@@ -338,7 +336,13 @@ public:
         std::unordered_map<const Vertex*, VertexDescriptor> origToNew;
 
         for (const auto& origVertex : other._vertices) {
-            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            VertexDescriptor newV;
+
+            if constexpr (std::is_void_v<VertexData>)
+                newV = emplaceVertex();
+            else
+                newV = emplaceVertex(origVertex._data);
+
             origToNew[&origVertex] = newV;
         }
 
@@ -370,8 +374,14 @@ public:
         return VertexDescriptor(it);
     }
 
-    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
-    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return emplaceVertex(std::forward<T>(data)); }
+
+    VertexDescriptor addVertex()
+        requires (std::is_void_v<VertexData>)
+    { return emplaceVertex(); }
 
     void removeVertex(VertexDescriptor vertex) {
         auto incidentCopy = vertex._label->_incidentEdges;
@@ -466,11 +476,6 @@ public:
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t edgeCount()   const { return _edges.size(); }
 
-    bool hasVertex(const VertexData& data) const {
-        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
-        return it != vertices().end();
-    }
-
     std::optional<EdgeDescriptor> findEdge(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.incidentEdges())
             if (*e.otherEnd(from) == to) return e;
@@ -540,11 +545,14 @@ public:
     VertexDescriptor emplaceVertex(Args&&... args)
     { return _pseudoGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    VertexDescriptor addVertex(const VertexData& data)
-    { return _pseudoGraph.addVertex(data); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return _pseudoGraph.addVertex(std::forward<T>(data)); }
 
-    VertexDescriptor addVertex(VertexData&& data)
-    { return _pseudoGraph.addVertex(std::move(data)); }
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return _pseudoGraph.addVertex(); }
 
     void removeVertex(VertexDescriptor v)
     { _pseudoGraph.removeVertex(v); }
@@ -623,89 +631,6 @@ private:
 
 /*** End of inlined file: UndirectedMultiGraph.hpp ***/
 
-
-/*** Start of inlined file: Matrix.hpp ***/
-#ifndef MATRIX_HPP
-#define MATRIX_HPP
-
-#include <vector>
-
-namespace exx::incident {
-
-template<typename T>
-class Matrix {
-public:
-    using value_type = T;
-
-    explicit Matrix(std::size_t rows, std::size_t cols)
-        : _rows(rows), _cols(cols), _storage(rows * cols) {}
-
-    std::size_t rows() const noexcept { return _rows; }
-    std::size_t cols() const noexcept { return _cols; }
-
-    const T* data() const { return _storage.data(); }
-
-    decltype(auto) operator()(std::size_t i, std::size_t j)
-    { return _storage[i * _cols + j]; }
-
-    decltype(auto) operator()(std::size_t i, std::size_t j) const
-    { return _storage[i * _cols + j]; }
-
-private:
-    std::size_t _rows, _cols;
-    std::vector<T> _storage;
-};
-
-} // namespace exx::incident
-
-#endif // MATRIX_HPP
-
-/*** End of inlined file: Matrix.hpp ***/
-
-
-/*** Start of inlined file: errors.hpp ***/
-#ifndef EXX_ERRORS_HPP
-#define EXX_ERRORS_HPP
-
-#include <string>
-
-namespace exx::incident {
-
-enum class GraphBuildingError {
-    NullPointer,
-    EmptyVector,
-    ZeroSize,
-    NonSquareMatrix
-};
-
-inline std::string to_string(GraphBuildingError error) noexcept {
-    using enum GraphBuildingError;
-    switch (error) {
-    case GraphBuildingError::NullPointer:          return "NullPointer: input matrix pointer is null";
-    case GraphBuildingError::EmptyVector:          return "EmptyVector: there are no data in vector";
-    case GraphBuildingError::ZeroSize:             return "ZeroSize: matrix size is zero";
-    case GraphBuildingError::NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
-    default:                                       return "Unknown error";
-    }
-}
-
-enum class PrimError {
-    DisconnectedGraph
-};
-
-inline std::string to_string(PrimError e) {
-    switch (e) {
-    case PrimError::DisconnectedGraph: return "Graph is disconnected.";
-    default:                           return "Unknown error";
-    }
-}
-
-} // namespace exx::incident
-
-#endif // EXX_ERRORS_HPP
-
-/*** End of inlined file: errors.hpp ***/
-
 namespace exx::incident {
 
 template<typename VertexData, typename EdgeData>
@@ -745,11 +670,14 @@ public:
     VertexDescriptor emplaceVertex(Args&&... args)
     { return _multiGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    VertexDescriptor addVertex(const VertexData& data)
-    { return _multiGraph.addVertex(data); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return _multiGraph.addVertex(std::forward<T>(data)); }
 
-    VertexDescriptor addVertex(VertexData&& data)
-    { return _multiGraph.addVertex(std::move(data)); }
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return _multiGraph.addVertex(); }
 
     void removeVertex(VertexDescriptor v) { _multiGraph.removeVertex(v); }
 
@@ -816,135 +744,6 @@ public:
 
     bool empty() const { return _multiGraph.empty(); }
 
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    Matrix<T> toAdjacencyMatrix(T default_value = T{}) const {
-        const std::size_t n = vertexCount();
-        Matrix<T> mat(n, n);
-
-        for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j)
-                mat(i, j) = default_value;
-
-        for (auto v : vertices()) {
-            for (auto e : v.incidentEdges()) {
-                auto u = *e.otherEnd(v);
-                mat(v.data(), u.data()) = e.data();
-                mat(u.data(), v.data()) = e.data();
-            }
-        }
-        return mat;
-    }
-
-    Matrix<bool> toAdjacencyMatrix() const
-        requires std::is_void_v<EdgeData>
-    {
-        const std::size_t n = vertexCount();
-        Matrix<bool> mat(n, n);
-
-        for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j)
-                mat(i, j) = false;
-
-        for (auto v : vertices()) {
-            for (auto e : v.incidentEdges()) {
-                auto u = *e.otherEnd(v);
-                mat(v.data(), u.data()) = true;
-                mat(u.data(), v.data()) = true;
-            }
-        }
-        return mat;
-    }
-
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    static auto fromAdjacencyMatrix(const T* matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
-    {
-        if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
-        if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
-
-        UndirectedGraph<VertexData, EdgeData> g;
-        std::unordered_map<std::size_t,
-                           typename UndirectedGraph<VertexData, EdgeData>::VertexDescriptor> ht;
-
-        for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(static_cast<VertexData>(i));
-            ht.emplace(i, desc);
-        }
-
-        for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t j = i + 1; j < n; ++j) {
-                auto val = matrix[i * n + j];
-                if (val != EdgeData{})
-                    g.addEdge(ht[i], ht[j], val);
-            }
-        }
-
-        return g;
-    }
-
-    template <typename T = EdgeData>
-        requires (!std::is_void_v<EdgeData>)
-    static auto fromAdjacencyMatrix(const std::vector<std::vector<T>>& matrix)
-        ->std::expected<UndirectedGraph<VertexData, T>, GraphBuildingError>
-    {
-        if (matrix.empty())
-            return std::unexpected(GraphBuildingError::ZeroSize);
-
-        std::size_t n = matrix.size();
-        std::vector<EdgeData> flat;
-        flat.reserve(n * n);
-        for (const auto& row : matrix) {
-            if (row.size() != n) return std::unexpected(GraphBuildingError::NonSquareMatrix);
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
-        return fromAdjacencyMatrix<EdgeData>(flat.data(), n);
-    }
-
-    static auto fromAdjacencyMatrix(const std::vector<bool>& matrix, std::size_t n)
-        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
-        requires std::is_void_v<EdgeData>
-    {
-        if (matrix.empty()) return std::unexpected(GraphBuildingError::EmptyVector);
-        if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
-
-        UndirectedGraph<VertexData, void> g;
-        std::unordered_map<VertexData,
-                           typename UndirectedGraph<VertexData, void>::VertexDescriptor> ht;
-
-        for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(static_cast<VertexData>(i));
-            ht.emplace(i, desc);
-        }
-
-        for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t j = i + 1; j < n; ++j) {
-                auto val = matrix[i * n + j];
-                if (val) g.addEdge(ht[i], ht[j]);
-            }
-        }
-
-        return g;
-    }
-
-    static auto fromAdjacencyMatrix(const std::vector<std::vector<bool>>& matrix)
-        ->std::expected<UndirectedGraph<VertexData, void>, GraphBuildingError>
-        requires std::is_void_v<EdgeData>
-    {
-        if (matrix.empty())
-            return std::unexpected(GraphBuildingError::ZeroSize);
-
-        std::size_t n = matrix.size();
-        std::vector<bool> flat;
-        flat.reserve(n * n);
-        for (const auto& row : matrix) {
-            if (row.size() != n) return std::unexpected(GraphBuildingError::NonSquareMatrix);
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
-        return fromAdjacencyMatrix(flat, n);
-    }
-
 private:
 
     UndirectedMultiGraph<VertexData, EdgeData> _multiGraph;
@@ -972,7 +771,6 @@ private:
 #define EXX_DIRECTEDGRAPH_HPP
 
 #include <optional>
-#include <expected>
 
 
 /*** Start of inlined file: DirectedMultiGraph.hpp ***/
@@ -997,9 +795,6 @@ namespace exx::incident {
 
 template<typename VertexData, typename ArcData>
 class DirectedPseudoGraph {
-
-    static_assert(!std::is_void_v<VertexData>, "VertexData cannot be void");
-
 private:
     struct Vertex;
     struct Arc;
@@ -1011,10 +806,13 @@ private:
     using ArcLabel         = typename ArcList::iterator;
     using ArcConstLabel    = typename ArcList::const_iterator;
 
-    struct EmptyArcData final {};
+    struct EmptyData final {};
     using ConditionalArcData = std::conditional_t<std::is_void_v<ArcData>,
-                                                  EmptyArcData,
+                                                  EmptyData,
                                                   ArcData>;
+    using ConditionalVertexData = std::conditional_t<std::is_void_v<VertexData>,
+                                                     EmptyData,
+                                                     VertexData>;
 
     struct EraseAccelerationMetaData {
         typename std::list<ArcLabel>::iterator _posInFrom{};
@@ -1028,6 +826,7 @@ private:
         EraseAccelerationMetaData _meta{};
 
         template<typename... Args>
+            requires std::constructible_from<ConditionalArcData, Args...>
         Arc(VertexLabel from, VertexLabel to, Args&&... args)
             : _from(from), _to(to)
         {
@@ -1042,9 +841,17 @@ private:
     struct Vertex {
         std::list<ArcLabel> _outgoingArcs;
         std::list<ArcLabel> _incomingArcs;
-        VertexData _data;
+        [[no_unique_address]] ConditionalVertexData _data;
+
         template<typename... Args>
-        explicit Vertex(Args&&... args) : _data(std::forward<Args>(args)...) {}
+            requires std::constructible_from<ConditionalVertexData, Args...>
+        explicit Vertex(Args&&... args) {
+            if constexpr (!std::is_void_v<VertexData>)
+                _data = ConditionalVertexData(std::forward<Args>(args)...);
+            else
+                static_assert(sizeof...(Args) == 0,
+                              "VertexData is void, cannot pass data to vertex");
+        }
     };
 
     VertexList _vertices;
@@ -1092,8 +899,8 @@ private:
             requires isConst
             : _label(other._label) {}
 
-        auto& data()       requires (!isConst) { return _label->_data; }
-        const auto& data() const               { return _label->_data; }
+        auto& data()       requires (!isConst && !std::is_void_v<VertexData>) { return _label->_data; }
+        const auto& data() const requires (!std::is_void_v<VertexData>) { return _label->_data; }
 
         std::size_t outDegree() const { return _label->_outgoingArcs.size(); }
         std::size_t inDegree() const { return _label->_incomingArcs.size(); }
@@ -1108,41 +915,22 @@ private:
                                          [](const ArcLabel& al) { return ArcDescriptorImpl<isConst>(al); });
         }
 
-        template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
             std::unordered_set<VertexDescriptorImpl> unique;
             for (auto e : outgoingArcs()) {
                 auto other = e.followArcDirection(*this);
                 unique.insert(*other);
             }
-
-            std::vector<VertexDescriptorImpl> res(unique.begin(), unique.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b)
-                                  { return Cmp{}(a.data(), b.data()); });
-
-            return res;
+            return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
-        std::vector<VertexDescriptorImpl> unorderedOutV() const { return adjacentVertices<void>(); }
-
-        template<typename Cmp = std::less<VertexData>>
         std::vector<VertexDescriptorImpl> incomingVertices() const {
             std::unordered_set<VertexDescriptorImpl> unique;
             for (auto a : incomingArcs())
                 unique.insert(a.from());
 
-            std::vector<VertexDescriptorImpl> res(unique.begin(), unique.end());
-
-            if constexpr(!std::is_void_v<Cmp>)
-                std::ranges::sort(res, [](const auto& a, const auto& b)
-                                  { return Cmp{}(a.data(), b.data()); });
-
-            return res;
+            return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
-
-        std::vector<VertexDescriptorImpl> unorderedInV() const { return incomingVertices<void>(); }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
         bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
@@ -1296,7 +1084,13 @@ public:
         std::unordered_map<const Vertex*, VertexDescriptor> origToNew;
 
         for (const auto& origVertex : other._vertices) {
-            VertexDescriptor newV = emplaceVertex(origVertex._data);
+            VertexDescriptor newV;
+
+            if constexpr (std::is_void_v<VertexData>)
+                newV = emplaceVertex();
+            else
+                newV = emplaceVertex(origVertex._data);
+
             origToNew[&origVertex] = newV;
         }
 
@@ -1328,8 +1122,14 @@ public:
         return VertexDescriptor(it);
     }
 
-    VertexDescriptor addVertex(const VertexData& data) { return emplaceVertex(data); }
-    VertexDescriptor addVertex(VertexData&& data) { return emplaceVertex(std::move(data)); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return emplaceVertex(std::forward<T>(data)); }
+
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return emplaceVertex(); }
 
     void removeVertex(VertexDescriptor vertex) {
         auto outgoingArcsCopy = vertex._label->_outgoingArcs;
@@ -1429,11 +1229,6 @@ public:
     std::size_t vertexCount() const { return _vertices.size(); }
     std::size_t arcCount() const { return _arcs.size(); }
 
-    bool hasVertex(const VertexData& data) const {
-        auto it = std::ranges::find_if(vertices(), [&](auto vd){ return vd.data() == data; });
-        return it != vertices().end();
-    }
-
     std::optional<ArcDescriptor> findArc(VertexDescriptor from, VertexDescriptor to) {
         for (auto e : from.outgoingArcs())
             if (*e.followArcDirection(from) == to) return e;
@@ -1526,11 +1321,14 @@ public:
     VertexDescriptor emplaceVertex(Args&&... args)
     { return _pseudoGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    VertexDescriptor addVertex(const VertexData& data)
-    { return _pseudoGraph.addVertex(data); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return _pseudoGraph.addVertex(std::forward<T>(data)); }
 
-    VertexDescriptor addVertex(VertexData&& data)
-    { return _pseudoGraph.addVertex(std::move(data)); }
+    VertexDescriptor addVertex()
+        requires std::is_void_v<VertexData>
+    { return _pseudoGraph.addVertex(); }
 
     void removeVertex(VertexDescriptor v)
     { _pseudoGraph.removeVertex(v); }
@@ -1597,7 +1395,7 @@ public:
 
     bool empty() const { return _pseudoGraph.empty(); }
 
-    bool roteteArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
+    bool rotateArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
 
 private:
 
@@ -1650,11 +1448,13 @@ public:
     VertexDescriptor emplaceVertex(Args&&... args)
     { return _multiGraph.emplaceVertex(std::forward<Args>(args)...); }
 
-    VertexDescriptor addVertex(const VertexData& data)
-    { return _multiGraph.addVertex(data); }
+    template<typename T = VertexData>
+        requires (!std::is_void_v<T>)
+    VertexDescriptor addVertex(T&& data)
+    { return _multiGraph.addVertex(std::forward<T>(data)); }
 
-    VertexDescriptor addVertex(VertexData&& data)
-    { return _multiGraph.addVertex(std::move(data)); }
+    VertexDescriptor addVertex() requires (std::is_void_v<VertexData>)
+    { return _multiGraph.addVertex(); }
 
     void removeVertex(VertexDescriptor v) { _multiGraph.removeVertex(v); }
 
@@ -1721,134 +1521,7 @@ public:
 
     bool empty() const { return _multiGraph.empty(); }
 
-    bool roteteArc(ArcDescriptor a) { return _multiGraph.rotateArc(a); }
-
-    template <typename T = ArcData>
-        requires (!std::is_void_v<ArcData>)
-    Matrix<T> toAdjacencyMatrix(T default_value = T{}) const {
-        const std::size_t n = vertexCount();
-        Matrix<T> mat(n, n);
-
-        for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j)
-                mat(i, j) = default_value;
-
-        for (auto v : vertices()) {
-            for (auto a : v.outgoingArcs()) {
-                auto u = a.to();
-                mat(v.data(), u.data()) = a.data();
-            }
-        }
-        return mat;
-    }
-
-    Matrix<bool> toAdjacencyMatrix() const
-        requires std::is_void_v<ArcData>
-    {
-        const std::size_t n = vertexCount();
-        Matrix<bool> mat(n, n);
-
-        for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j)
-                mat(i, j) = false;
-
-        for (auto v : vertices()) {
-            for (auto a : v.outgoingArcs()) {
-                auto u = a.to();
-                mat(v.data(), u.data()) = true;
-            }
-        }
-        return mat;
-    }
-
-    template <typename T = ArcData>
-        requires (!std::is_void_v<ArcData>)
-    static auto fromAdjacencyMatrix(const T* matrix, std::size_t n)
-        ->std::expected<DirectedGraph<VertexData, T>, GraphBuildingError>
-    {
-        if (!matrix) return std::unexpected(GraphBuildingError::NullPointer);
-        if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
-
-        DirectedGraph<VertexData, ArcData> g;
-        std::unordered_map<std::size_t,
-                           typename DirectedGraph<VertexData, ArcData>::VertexDescriptor> ht;
-
-        for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(static_cast<VertexData>(i));
-            ht.emplace(i, desc);
-        }
-
-        for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t j = 0; j < n; ++j) {
-                auto val = matrix[i * n + j];
-                if (val != T{})
-                    g.addArc(ht[i], ht[j], val);
-            }
-        }
-
-        return g;
-    }
-
-    template <typename T = ArcData>
-        requires (!std::is_void_v<ArcData>)
-    static auto fromAdjacencyMatrix(const std::vector<std::vector<T>>& matrix)
-        ->std::expected<DirectedGraph<VertexData, T>, GraphBuildingError>
-    {
-        if (matrix.empty())
-            return std::unexpected(GraphBuildingError::ZeroSize);
-
-        std::size_t n = matrix.size();
-        std::vector<T> flat;
-        flat.reserve(n * n);
-        for (const auto& row : matrix) {
-            if (row.size() != n) return std::unexpected(GraphBuildingError::NonSquareMatrix);
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
-        return fromAdjacencyMatrix<T>(flat.data(), n);
-    }
-
-    static auto fromAdjacencyMatrix(const std::vector<bool>& matrix, std::size_t n)
-        ->std::expected<DirectedGraph<VertexData, void>, GraphBuildingError>
-        requires std::is_void_v<ArcData>
-    {
-        if (matrix.empty()) return std::unexpected(GraphBuildingError::EmptyVector);
-        if (n == 0) return std::unexpected(GraphBuildingError::ZeroSize);
-
-        DirectedGraph<VertexData, void> g;
-        std::unordered_map<std::size_t,
-                           typename DirectedGraph<VertexData, void>::VertexDescriptor> ht;
-
-        for (std::size_t i = 0; i < n; ++i) {
-            auto desc = g.addVertex(static_cast<VertexData>(i));
-            ht.emplace(i, desc);
-        }
-
-        for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t j = 0; j < n; ++j) {
-                auto val = matrix[i * n + j];
-                if (val) g.addArc(ht[i], ht[j]);
-            }
-        }
-
-        return g;
-    }
-
-    static auto fromAdjacencyMatrix(const std::vector<std::vector<bool>>& matrix)
-        ->std::expected<DirectedGraph<VertexData, void>, GraphBuildingError>
-        requires std::is_void_v<ArcData>
-    {
-        if (matrix.empty())
-            return std::unexpected(GraphBuildingError::ZeroSize);
-
-        std::size_t n = matrix.size();
-        std::vector<bool> flat;
-        flat.reserve(n * n);
-        for (const auto& row : matrix) {
-            if (row.size() != n) return std::unexpected(GraphBuildingError::NonSquareMatrix);
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
-        return fromAdjacencyMatrix(flat, n);
-    }
+    bool rotateArc(ArcDescriptor a) { return _multiGraph.rotateArc(a); }
 
 private:
 
@@ -2015,6 +1688,17 @@ concept DirectedGraphConcept = GraphConcept<G> &&
 
 namespace exx::incident {
 
+enum class PrimError {
+    DisconnectedGraph
+};
+
+inline std::string to_string(PrimError e) {
+    switch (e) {
+    case PrimError::DisconnectedGraph: return "Graph is disconnected.";
+    default:                           return "Unknown error";
+    }
+}
+
 template<UndirectedGraphConcept G>
     requires std::is_copy_constructible_v<typename G::EdgeValueType>
 auto mstPrim(const G& graph)
@@ -2097,8 +1781,7 @@ auto mstPrim(const G& graph)
 
 namespace exx::incident {
 
-template<GraphConcept Graph,
-         typename Cmp = std::less<typename Graph::VertexValueType>>
+template<GraphConcept Graph>
 auto bfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
 {
@@ -2117,7 +1800,7 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 
         res.push_back(current);
 
-        for(auto adjV : current.template adjacentVertices<Cmp>()) {
+        for(auto adjV : current.adjacentVertices()) {
             if(!visited.contains(adjV)) {
                 queue.push(adjV);
                 visited.insert(adjV);
@@ -2145,8 +1828,7 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 
 namespace exx::incident {
 
-template<GraphConcept Graph,
-         typename Cmp = std::less<typename Graph::VertexValueType>>
+template<GraphConcept Graph>
 auto dfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
 {
@@ -2167,7 +1849,7 @@ auto dfs(Graph& G, typename Graph::VertexDescriptor start)
 
             res.push_back(current);
 
-            for(auto adjV : current.template adjacentVertices<Cmp>())
+            for(auto adjV : current.adjacentVertices())
                 if(!visited.contains(adjV)) stack.push(adjV);
         }
     }

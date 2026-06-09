@@ -8,8 +8,7 @@
 
 namespace exx::incident {
 
-template<GraphConcept Graph,
-         typename Cmp = std::less<typename Graph::VertexValueType>>
+template<GraphConcept Graph>
 auto bfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
 {
@@ -28,7 +27,7 @@ auto bfs(Graph& G, typename Graph::VertexDescriptor start)
 
         res.push_back(current);
 
-        for(auto adjV : current.template adjacentVertices<Cmp>()) {
+        for(auto adjV : current.adjacentVertices()) {
             if(!visited.contains(adjV)) {
                 queue.push(adjV);
                 visited.insert(adjV);

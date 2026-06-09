@@ -1,10 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_template_test_macros.hpp>
 
 #include "incident/directed/DirectedPseudoGraph.hpp"
 
 #include <string>
-#include <unordered_set>
 
 using namespace exx::incident;
 
@@ -39,7 +37,9 @@ void requireValidDirectedGraph(const Graph& g) {
     REQUIRE(inSum == g.arcCount());
 }
 
-TEST_CASE("DirectedPseudoGraph unweighted", "[directed][pseudograph][unweighted]") {
+TEST_CASE("DirectedPseudoGraph weighted vertices, unweighted arcs",
+          "[directed][pseudograph][weighted vertices][unweighted edges]")
+{
     using Graph = DirectedPseudoGraph<std::string, void>;
 
     SECTION("Empty graph state") {
@@ -177,8 +177,14 @@ TEST_CASE("DirectedPseudoGraph unweighted", "[directed][pseudograph][unweighted]
             Graph copy(g);
             REQUIRE(copy.vertexCount() == 2);
             REQUIRE(copy.arcCount() == 2);
-            REQUIRE(copy.hasVertex("A"));
-            REQUIRE(copy.hasVertex("B"));
+
+            bool hasA = false, hasB = false;
+            for (auto v : copy.vertices()) {
+                if (v.data() == "A") hasA = true;
+                if (v.data() == "B") hasB = true;
+            }
+            REQUIRE(hasA);
+            REQUIRE(hasB);
             requireValidDirectedGraph(copy);
         }
 
@@ -210,8 +216,6 @@ TEST_CASE("DirectedPseudoGraph unweighted", "[directed][pseudograph][unweighted]
         const Graph& cg = g;
         REQUIRE(cg.vertexCount() == 2);
         REQUIRE(cg.arcCount() == 2);
-        REQUIRE(cg.hasVertex("Alpha"));
-        REQUIRE(cg.hasVertex("Beta"));
 
         Graph::ConstVertexDescriptor ca, cb;
         for (auto v : cg.vertices()) if (v.data() == "Alpha") ca = v;
@@ -221,9 +225,29 @@ TEST_CASE("DirectedPseudoGraph unweighted", "[directed][pseudograph][unweighted]
         REQUIRE_FALSE(cg.hasArc(cb, ca));
         requireValidDirectedGraph(cg);
     }
+
+    SECTION("rotateArc works") {
+        Graph g;
+        auto a = g.addVertex("A");
+        auto b = g.addVertex("B");
+        auto arc = g.addArc(a, b);
+
+        REQUIRE(g.rotateArc(arc));
+        REQUIRE(arc.from() == b);
+        REQUIRE(arc.to() == a);
+        REQUIRE(g.hasArc(b, a));
+        REQUIRE_FALSE(g.hasArc(a, b));
+
+        auto loop = g.addArc(a, a);
+        REQUIRE_FALSE(g.rotateArc(loop));
+        REQUIRE(loop.from() == a);
+        REQUIRE(loop.to() == a);
+    }
 }
 
-TEST_CASE("DirectedPseudoGraph weighted", "[directed][pseudograph][weighted]") {
+TEST_CASE("DirectedPseudoGraph weighted vertices, weighted arcs",
+          "[directed][pseudograph][weighted vertices][weighted edges]")
+{
     using Graph = DirectedPseudoGraph<int, double>;
 
     SECTION("Weighted arc data") {
@@ -280,275 +304,259 @@ TEST_CASE("DirectedPseudoGraph weighted", "[directed][pseudograph][weighted]") {
             requireValidDirectedGraph(moved);
         }
     }
+
+    SECTION("rotateArc preserves data") {
+        Graph g;
+        auto a = g.addVertex(1);
+        auto b = g.addVertex(2);
+        auto arc = g.addArc(a, b, 99.9);
+        g.rotateArc(arc);
+        REQUIRE(arc.data() == 99.9);
+        REQUIRE(arc.from().data() == 2);
+        REQUIRE(arc.to().data() == 1);
+    }
 }
 
-TEST_CASE("DirectedPseudoGraph descriptors", "[directed][pseudograph][descriptors]") {
-    using Graph = DirectedPseudoGraph<std::string, int>;
-    using VertexDesc = Graph::VertexDescriptor;
-    using ConstVertexDesc = Graph::ConstVertexDescriptor;
-    using ArcDesc = Graph::ArcDescriptor;
-    using ConstArcDesc = Graph::ConstArcDescriptor;
+TEST_CASE("DirectedPseudoGraph unweighted vertices, unweighted arcs",
+          "[directed][pseudograph][unweighted vertices][unweighted edges]")
+{
+    using Graph = DirectedPseudoGraph<void, void>;
 
-    Graph g;
-    auto vA = g.addVertex("A");
-    auto vB = g.addVertex("B");
-    auto vC = g.addVertex("C");
-    auto vD = g.addVertex("D");
+    SECTION("Empty graph") {
+        Graph g;
+        REQUIRE(g.empty());
+        REQUIRE(g.vertexCount() == 0);
+        REQUIRE(g.arcCount() == 0);
+        requireValidDirectedGraph(g);
+    }
 
-    // Дуги: A->B (10), A->B (20) – кратные, A->A (30) – петля, B->C (40), C->D (50)
-    auto aAB1 = g.addArc(vA, vB, 10);
-    auto aAB2 = g.addArc(vA, vB, 20);
-    auto aLoop = g.addArc(vA, vA, 30);
-    auto aBC   = g.addArc(vB, vC, 40);
-    auto aCD   = g.addArc(vC, vD, 50);
+    SECTION("Add vertices and arcs") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto c = g.emplaceVertex();
 
-    requireValidDirectedGraph(g);
+        REQUIRE(g.vertexCount() == 3);
+        REQUIRE(a.outDegree() == 0);
+        REQUIRE(a.inDegree() == 0);
 
-    SECTION("VertexDescriptor basics") {
-        REQUIRE(vA.outDegree() == 3);
-        REQUIRE(vA.inDegree()  == 1);
-        REQUIRE(vB.outDegree() == 1);
-        REQUIRE(vB.inDegree()  == 2);
-        REQUIRE(vC.outDegree() == 1);
-        REQUIRE(vC.inDegree()  == 1);
-        REQUIRE(vD.outDegree() == 0);
-        REQUIRE(vD.inDegree()  == 1);
+        auto ab = g.addArc(a, b);
+        g.addArc(a, c);
+        REQUIRE(g.arcCount() == 2);
 
-        REQUIRE(vA.data() == "A");
-        vA.data() = "A1";
-        REQUIRE(vA.data() == "A1");
-        vA.data() = "A";
+        REQUIRE(a.outDegree() == 2);
+        REQUIRE(a.inDegree()  == 0);
+        REQUIRE(b.outDegree() == 0);
+        REQUIRE(b.inDegree()  == 1);
+        REQUIRE(c.outDegree() == 0);
+        REQUIRE(c.inDegree()  == 1);
 
-        auto outA = vA.outgoingArcs();
-        REQUIRE(outA.size() == 3);
-        bool hasLoop = false, hasAB1 = false, hasAB2 = false;
-        for (auto a : outA) {
-            if (a.from() == vA && a.to() == vA) hasLoop = true;
-            if (a.from() == vA && a.to() == vB) {
-                if (a.data() == 10) hasAB1 = true;
-                if (a.data() == 20) hasAB2 = true;
-            }
-        }
-        REQUIRE(hasLoop);
-        REQUIRE(hasAB1);
-        REQUIRE(hasAB2);
+        REQUIRE(g.hasArc(a, b));
+        REQUIRE_FALSE(g.hasArc(b, a));
+        REQUIRE_FALSE(g.hasArc(b, c));
 
-        auto inA = vA.incomingArcs();
-        REQUIRE(inA.size() == 1);
-        REQUIRE((*inA.begin()).from() == vA);
-        REQUIRE((*inA.begin()).to()   == vA);
+        requireValidDirectedGraph(g);
 
-        {
-            auto adjA = vA.adjacentVertices();
-            REQUIRE(adjA.size() == 2);
-            std::unordered_set<std::string> outNames;
-            for (auto v : adjA) outNames.insert(v.data());
-            REQUIRE(outNames.contains("A"));
-            REQUIRE(outNames.contains("B"));
+        g.removeArc(ab);
+        REQUIRE(g.arcCount() == 1);
+        REQUIRE(a.outDegree() == 1);
+        REQUIRE(b.inDegree()  == 0);
+        requireValidDirectedGraph(g);
 
-            auto unordA = vA.unorderedOutV();
-            REQUIRE(unordA.size() == 2);
-            std::unordered_set<std::string> unordSet;
-            for (auto v : unordA) unordSet.insert(v.data());
-            REQUIRE(unordSet == outNames);
+        g.removeVertex(a);
+        REQUIRE(g.vertexCount() == 2);
+        REQUIRE(g.arcCount() == 0);
+        requireValidDirectedGraph(g);
+    }
 
-            auto adjADesc = vA.adjacentVertices<std::greater<std::string>>();
-            REQUIRE(adjADesc.size() == 2);
-            REQUIRE(adjADesc[0].data() == "B");
-            REQUIRE(adjADesc[1].data() == "A");
+    SECTION("Self-loops and multiarcs") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
 
-            auto adjB = vB.adjacentVertices();
-            REQUIRE(adjB.size() == 1);
-            REQUIRE(adjB[0].data() == "C");
-            REQUIRE(vB.unorderedOutV()[0].data() == "C");
-
-            REQUIRE(vD.adjacentVertices().empty());
-            REQUIRE(vD.unorderedOutV().empty());
+        SECTION("Self-loop") {
+            auto loop = g.addArc(a, a);
+            REQUIRE(g.arcCount() == 1);
+            REQUIRE(a.outDegree() == 1);
+            REQUIRE(a.inDegree() == 1);
+            REQUIRE(g.hasArc(a, a));
+            requireValidDirectedGraph(g);
+            g.removeArc(loop);
+            REQUIRE(g.arcCount() == 0);
         }
 
-        {
-            auto inA = vA.incomingVertices();
-            REQUIRE(inA.size() == 1);
-            REQUIRE(inA[0].data() == "A");
+        SECTION("Multiple arcs") {
+            g.addArc(a, b);
+            g.addArc(a, b);
+            REQUIRE(g.arcCount() == 2);
+            REQUIRE(a.outDegree() == 2);
+            REQUIRE(b.inDegree() == 2);
+            requireValidDirectedGraph(g);
+        }
 
-            auto inB = vB.incomingVertices();
-            REQUIRE(inB.size() == 1);
-            REQUIRE(inB[0].data() == "A");
-
-            auto inC = vC.incomingVertices();
-            REQUIRE(inC.size() == 1);
-            REQUIRE(inC[0].data() == "B");
-
-            auto inD = vD.incomingVertices();
-            REQUIRE(inD.size() == 1);
-            REQUIRE(inD[0].data() == "C");
-
-            auto unordInD = vD.unorderedInV();
-            REQUIRE(unordInD.size() == 1);
-            REQUIRE(unordInD[0].data() == "C");
-
-            auto inBSorted = vB.incomingVertices<std::less<std::string>>();
-            REQUIRE(inBSorted.size() == 1);
-            REQUIRE(inBSorted[0].data() == "A");
+        SECTION("Combined") {
+            g.addArc(a, a);
+            g.addArc(a, b);
+            g.addArc(a, b);
+            REQUIRE(g.arcCount() == 3);
+            REQUIRE(a.outDegree() == 3);
+            REQUIRE(a.inDegree() == 1);
+            REQUIRE(b.inDegree() == 2);
+            requireValidDirectedGraph(g);
         }
     }
 
-    SECTION("ArcDescriptor basics") {
-        REQUIRE(aAB1.data() == 10);
-        aAB1.data() = 100;
-        REQUIRE(aAB1.data() == 100);
-        aAB1.data() = 10;
+    SECTION("Iterators") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto c = g.addVertex();
+        g.addArc(a, b);
+        g.addArc(a, b);
+        g.addArc(a, a);
+        g.addArc(b, c);
 
-        REQUIRE(aAB1.from() == vA);
-        REQUIRE(aAB1.to()   == vB);
-        REQUIRE(aLoop.from() == vA);
-        REQUIRE(aLoop.to()   == vA);
-
-        auto follow = aAB1.followArcDirection(vA);
-        REQUIRE(follow.has_value());
-        REQUIRE(*follow == vB);
-        follow = aAB1.followArcDirection(vB);
-        REQUIRE_FALSE(follow.has_value());
-
-        auto other = aAB1.otherEnd(vA);
-        REQUIRE(other.has_value());
-        REQUIRE(*other == vB);
-        other = aAB1.otherEnd(vB);
-        REQUIRE(other.has_value());
-        REQUIRE(*other == vA);
-        other = aAB1.otherEnd(vC);
-        REQUIRE_FALSE(other.has_value());
-
-        auto loopOther = aLoop.otherEnd(vA);
-        REQUIRE(loopOther.has_value());
-        REQUIRE(*loopOther == vA);
-
-        ArcDesc copy = aAB1;
-        REQUIRE(copy == aAB1);
-        REQUIRE(copy != aAB2);
+        size_t vcnt = 0, acnt = 0;
+        for (auto v : g.vertices()) ++vcnt;
+        for (auto a : g.arcs()) ++acnt;
+        REQUIRE(vcnt == g.vertexCount());
+        REQUIRE(acnt == g.arcCount());
+        requireValidDirectedGraph(g);
     }
 
-    SECTION("rotateArc changes direction correctly") {
-        SECTION("Rotate non-loop arc") {
-            auto arc = aAB1;
-            bool rotated = g.rotateArc(arc);
-            REQUIRE(rotated);
+    SECTION("Copy and move") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        g.addArc(a, b);
+        g.addArc(a, a);
 
-            REQUIRE(arc.from() == vB);
-            REQUIRE(arc.to()   == vA);
-            REQUIRE(arc.data() == 10);
+        Graph copy(g);
+        REQUIRE(copy.vertexCount() == 2);
+        REQUIRE(copy.arcCount() == 2);
+        requireValidDirectedGraph(copy);
 
-            REQUIRE(vA.outDegree() == 2);
-            REQUIRE(vA.inDegree()  == 2);
-            REQUIRE(vB.outDegree() == 2);
-            REQUIRE(vB.inDegree()  == 1);
-
-            bool foundInBOut = false;
-            for (auto a : vB.outgoingArcs())
-                if (a == arc) foundInBOut = true;
-            REQUIRE(foundInBOut);
-
-            bool foundInAIn = false;
-            for (auto a : vA.incomingArcs())
-                if (a == arc) foundInAIn = true;
-            REQUIRE(foundInAIn);
-
-            g.rotateArc(arc);
-        }
-
-        SECTION("Rotate self-loop does nothing") {
-            auto loop = aLoop;
-            bool rotated = g.rotateArc(loop);
-            REQUIRE_FALSE(rotated);
-            REQUIRE(loop.from() == vA);
-            REQUIRE(loop.to()   == vA);
-            REQUIRE(vA.outDegree() == 3);
-            REQUIRE(vA.inDegree()  == 1);
-        }
-
-        SECTION("Rotate arc and then findArc works") {
-            auto arc = aBC;
-            g.rotateArc(arc);
-            REQUIRE(g.hasArc(vC, vB));
-            REQUIRE_FALSE(g.hasArc(vB, vC));
-
-            auto found = g.findArc(vC, vB);
-            REQUIRE(found.has_value());
-            REQUIRE(found->data() == 40);
-
-            g.rotateArc(arc);
-        }
+        Graph moved(std::move(g));
+        REQUIRE(moved.vertexCount() == 2);
+        REQUIRE(moved.arcCount() == 2);
+        requireValidDirectedGraph(moved);
+        REQUIRE(g.vertexCount() == 0);
     }
 
-    SECTION("Const descriptors") {
+    SECTION("Const correctness") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        g.addArc(a, b);
+        g.addArc(a, a);
+
         const Graph& cg = g;
-        ConstVertexDesc cvA, cvB;
-        for (auto v : cg.vertices()) if (v.data() == "A") cvA = v;
-        for (auto v : cg.vertices()) if (v.data() == "B") cvB = v;
+        REQUIRE(cg.vertexCount() == 2);
+        REQUIRE(cg.arcCount() == 2);
 
-        auto found = cg.findArc(cvA, cvB);
-        REQUIRE(found.has_value());
-        REQUIRE(found->from() == cvA);
-        REQUIRE(found->to()   == cvB);
-        REQUIRE(found->data() == 10);
-
-        auto constOut = cvA.adjacentVertices();
-        REQUIRE(constOut.size() == 2);
-        auto constIn = cvA.incomingVertices();
-        REQUIRE(constIn.size() == 1);
+        auto it = cg.vertices().begin();
+        auto ca = *it; ++it;
+        auto cb = *it;
+        REQUIRE(cg.hasArc(ca, cb));
+        REQUIRE_FALSE(cg.hasArc(cb, ca));
+        requireValidDirectedGraph(cg);
     }
 
-    SECTION("findArc and hasArc") {
-        auto found = g.findArc(vA, vB);
-        REQUIRE(found.has_value());
-        REQUIRE(found->from() == vA);
-        REQUIRE(found->to()   == vB);
-        REQUIRE(g.hasArc(vA, vB));
-        REQUIRE_FALSE(g.hasArc(vB, vA));
+    SECTION("rotateArc works") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto arc = g.addArc(a, b);
 
-        auto foundLoop = g.findArc(vA, vA);
-        REQUIRE(foundLoop.has_value());
-        REQUIRE(foundLoop->data() == 30);
+        REQUIRE(g.rotateArc(arc));
+        REQUIRE(arc.from() == b);
+        REQUIRE(arc.to() == a);
+        REQUIRE(g.hasArc(b, a));
+        REQUIRE_FALSE(g.hasArc(a, b));
+    }
+}
 
-        auto notFound = g.findArc(vB, vD);
-        REQUIRE_FALSE(notFound.has_value());
-        REQUIRE_FALSE(g.hasArc(vB, vD));
+TEST_CASE("DirectedPseudoGraph unweighted vertices, weighted arcs",
+          "[directed][pseudograph][unweighted vertices][weighted edges]")
+{
+    using Graph = DirectedPseudoGraph<void, int>;
+
+    SECTION("Arc data") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto e = g.addArc(a, b, 42);
+        REQUIRE(e.data() == 42);
+        e.data() = 100;
+        REQUIRE(e.data() == 100);
+        requireValidDirectedGraph(g);
     }
 
-    SECTION("incomingVertices handles multiarcs and loops correctly") {
-        Graph h;
-        auto x = h.addVertex("X");
-        auto y = h.addVertex("Y");
-        auto z = h.addVertex("Z");
+    SECTION("Multiarcs with different data") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto e1 = g.addArc(a, b, 10);
+        auto e2 = g.addArc(a, b, 20);
+        REQUIRE(g.arcCount() == 2);
+        REQUIRE(e1.data() == 10);
+        REQUIRE(e2.data() == 20);
+        requireValidDirectedGraph(g);
+    }
 
-        h.addArc(x, y, 1);
-        h.addArc(x, y, 2);
-        h.addArc(y, x, 3);
-        h.addArc(z, z, 4);
-        h.addArc(y, z, 5);
+    SECTION("Self-loop with data") {
+        Graph g;
+        auto a = g.addVertex();
+        auto loop = g.addArc(a, a, 999);
+        REQUIRE(loop.data() == 999);
+        REQUIRE(a.outDegree() == 1);
+        REQUIRE(a.inDegree() == 1);
+        requireValidDirectedGraph(g);
+    }
 
-        auto inY = y.incomingVertices();
-        REQUIRE(inY.size() == 1);
-        REQUIRE(inY[0].data() == "X");
+    SECTION("Data modification after copy") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto e = g.addArc(a, b, 5);
 
-        auto inX = x.incomingVertices();
-        REQUIRE(inX.size() == 1);
-        REQUIRE(inX[0].data() == "Y");
+        Graph copy = g;
+        auto it = copy.vertices().begin();
+        auto ca = *it; ++it;
+        auto cb = *it;
+        auto e_copy = *copy.findArc(ca, cb);
+        REQUIRE(e_copy.data() == 5);
+        e_copy.data() = 7;
+        REQUIRE(e_copy.data() == 7);
+        REQUIRE(e.data() == 5);
+        requireValidDirectedGraph(copy);
+        requireValidDirectedGraph(g);
+    }
 
-        auto inZ = z.incomingVertices();
-        REQUIRE(inZ.size() == 2);
-        std::unordered_set<std::string> expected = {"Y", "Z"};
-        for (auto v : inZ)
-            REQUIRE(expected.contains(v.data()));
+    SECTION("Const access to arc data") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        g.addArc(a, b, 123);
 
-        auto unordInZ = z.unorderedInV();
-        REQUIRE(unordInZ.size() == 2);
-        std::unordered_set<std::string> unordSet;
-        for (auto v : unordInZ) unordSet.insert(v.data());
-        REQUIRE(unordSet == expected);
+        const Graph& cg = g;
+        auto it = cg.vertices().begin();
+        auto ca = *it; ++it;
+        auto cb = *it;
+        auto ce = cg.findArc(ca, cb);
+        REQUIRE(ce.has_value());
+        REQUIRE(ce->data() == 123);
+        requireValidDirectedGraph(cg);
+    }
 
-        auto outX = x.adjacentVertices();
-        REQUIRE(outX.size() == 1);
-        REQUIRE(outX[0].data() == "Y");
+    SECTION("rotateArc preserves data") {
+        Graph g;
+        auto a = g.addVertex();
+        auto b = g.addVertex();
+        auto arc = g.addArc(a, b, 77);
+        g.rotateArc(arc);
+        REQUIRE(arc.data() == 77);
+        REQUIRE(arc.from() == b);
+        REQUIRE(arc.to() == a);
     }
 }

@@ -36,15 +36,15 @@ void requireValidUndirectedGraph(const Graph& g){
 }
 
 TEST_CASE("UndirectedMultiGraph unweighted",
-          "[undirected][multigraph][unweighted]")
+          "[undirected][multigraph][unweighted vertices][unweighted edges]")
 {
-    using Graph = UndirectedMultiGraph<std::string, void>;
+    using Graph = UndirectedMultiGraph<void, void>;
 
     SECTION("Multi graph specific befavior") {
         Graph g;
 
-        auto a = g.addVertex("A");
-        auto b = g.addVertex("B");
+        auto a = g.addVertex();
+        auto b = g.addVertex();
         SECTION("No self-loops") {
             auto loop = g.addEdge(a, a);
 

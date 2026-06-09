@@ -1,8 +1,6 @@
-# "Incident" is a graph library
+# Incident
 
-Header-only C++20 library that allows you to use the graph abstraction in your projects.
-
-This is the initial release. The library will expand over time.
+"Incident" is a header-only C++23 library that allows you to use the graph abstraction in your projects.
 
 Library architecture consists of some main aspects: 
 
@@ -12,7 +10,7 @@ Library architecture consists of some main aspects:
 They are lightweight and provide only `++`, `==`, and `operator*` (which returns a **descriptor** by value).
 
 **Descriptors** (vertex descriptor, edge/arc descriptor) are the main way to access graph elements.  
-They provide methods like `.data()`, `.adjacentArcs()`, `.from()`, `.to()`, `.incidentEdges()`, etc.  
+They provide methods like `.data()`, `.adjacentVertices()`, `.from()`, `.to()`, `.incidentEdges()`, etc.  
 Descriptors are cheap to copy and can be stored, compared, and passed around safely as long as the referenced element exists.
 
 This separation gives you:
@@ -45,7 +43,7 @@ You always can include all content of "Incident" immediately by using `single_he
 
 Operations that can fail (like adding a vertex that already exists, or adding an edge
 when vertices are missing or the graph forbids it) do not throw exceptions.
-Instead they return `std::optional<T>`. You get either a valid descriptor or std::nullopt.
+Instead they return `std::optional<T>` and `std::expected<T, Err>`. You get either a valid descriptor or std::nullopt.
 
 This forces you to check the result explicitly. No hidden crashes. No try/catch.
 
@@ -57,7 +55,7 @@ graphs are implemented, but the design will be extended to directed graphs.
 ### Undirected graph 
 Edges have no direction. Edge (u,v) is the same as (v,u).
 
-### Directed graph (work in progress)
+### Directed graph 
 Arcs have a direction: from source to target. Arcs are not symmetric.
 
 ## All Graphs may be:

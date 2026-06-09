@@ -9,8 +9,7 @@
 
 namespace exx::incident {
 
-template<GraphConcept Graph,
-         typename Cmp = std::less<typename Graph::VertexValueType>>
+template<GraphConcept Graph>
 auto dfs(Graph& G, typename Graph::VertexDescriptor start)
     ->std::vector<typename Graph::VertexDescriptor>
 {
@@ -31,7 +30,7 @@ auto dfs(Graph& G, typename Graph::VertexDescriptor start)
 
             res.push_back(current);
 
-            for(auto adjV : current.template adjacentVertices<Cmp>())
+            for(auto adjV : current.adjacentVertices())
                 if(!visited.contains(adjV)) stack.push(adjV);
         }
     }

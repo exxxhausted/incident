@@ -1,29 +1,61 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <unordered_set>
+#include <vector>
 
 #include "incident/algorithms/dfs.hpp"
-#include "incident/undirected/undirected.hpp" // IWYU pragma: keep
-#include "incident/directed/directed.hpp"     // IWYU pragma: keep
+#include "incident/undirected/UndirectedGraph.hpp"
+#include "incident/undirected/UndirectedMultiGraph.hpp"
+#include "incident/undirected/UndirectedPseudoGraph.hpp"
+#include "incident/directed/DirectedGraph.hpp"
+#include "incident/directed/DirectedMultiGraph.hpp"
+#include "incident/directed/DirectedPseudoGraph.hpp"
 #include "incident/utility/UniqueVertexIndexedView.hpp"
 
 using namespace exx::incident;
 
-// ------------------ Неориентированные тесты (проверка достижимости) ------------------
-TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
-    using Graph = UndirectedGraph<int, void>;
+static UndirectedGraph<int, void> makeUndirectedGraphFromBoolMatrix(const std::vector<bool>& matrix,
+                                                                    std::size_t n)
+{
+    UndirectedGraph<int, void> g;
+    std::vector<UndirectedGraph<int, void>::VertexDescriptor> verts(n);
+    for (std::size_t i = 0; i < n; ++i)
+        verts[i] = g.addVertex(static_cast<int>(i));
 
+    for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = i + 1; j < n; ++j)
+            if (matrix[i * n + j])
+                g.addEdge(verts[i], verts[j]);
+    return g;
+}
+
+// ------------------------------------------------------------
+static DirectedGraph<int, void> makeDirectedGraphFromBoolMatrix(const std::vector<std::vector<bool>>& matrix)
+{
+    std::size_t n = matrix.size();
+    DirectedGraph<int, void> g;
+    std::vector<DirectedGraph<int, void>::VertexDescriptor> verts(n);
+    for (std::size_t i = 0; i < n; ++i)
+        verts[i] = g.addVertex(static_cast<int>(i));
+
+    for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = 0; j < n; ++j)
+            if (matrix[i][j])
+                g.addArc(verts[i], verts[j]);
+    return g;
+}
+
+TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
     SECTION("Simple connected graph") {
-        std::vector<bool> matrix = {
+        std::vector<bool> mat = {
             0,1,1,0,
             1,0,1,1,
             1,1,0,0,
             0,1,0,0
         };
-        auto g = Graph::fromAdjacencyMatrix(matrix, 4);
-        REQUIRE(g.has_value());
-        auto start = *g->beginVertices(); // vertex 0
-        auto result = dfs(*g, start);
+        auto g = makeUndirectedGraphFromBoolMatrix(mat, 4);
+        auto start = *g.beginVertices(); // vertex 0
+        auto result = dfs(g, start);
         std::unordered_set<int> expected = {0,1,2,3};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -31,16 +63,15 @@ TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
     }
 
     SECTION("Disconnected graph") {
-        std::vector<bool> matrix = {
+        std::vector<bool> mat = {
             0,1,0,0,
             1,0,0,0,
             0,0,0,1,
             0,0,1,0
         };
-        auto g = Graph::fromAdjacencyMatrix(matrix, 4);
-        REQUIRE(g.has_value());
-        auto start = *g->beginVertices(); // 0
-        auto result = dfs(*g, start);
+        auto g = makeUndirectedGraphFromBoolMatrix(mat, 4);
+        auto start = *g.beginVertices(); // 0
+        auto result = dfs(g, start);
         std::unordered_set<int> expected = {0,1};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -48,20 +79,20 @@ TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
     }
 
     SECTION("Handles multiedges (ignores duplicates)") {
-        std::vector<bool> matrix = {
+        // start with simple graph 0-1, 1-2
+        std::vector<bool> mat = {
             0,1,0,
             1,0,1,
             0,1,0
         };
-        auto simple = Graph::fromAdjacencyMatrix(matrix, 3);
-        REQUIRE(simple.has_value());
-        UndirectedMultiGraph<int, void> g(simple->baseMultiGraph());
-        auto gv = UniqueVertexIndexedView(g);
-        auto v0 = *gv.findVertex(0);
-        auto v1 = *gv.findVertex(1);
-        g.addEdge(v0, v1);
-        g.addEdge(v0, v1); // parallel edges
-        auto result = dfs(g, v0);
+        auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
+        UndirectedMultiGraph<int, void> multi(simple.baseMultiGraph());
+        auto view = UniqueVertexIndexedView(multi);
+        auto v0 = *view.findVertex(0);
+        auto v1 = *view.findVertex(1);
+        multi.addEdge(v0, v1); // parallel edge
+        multi.addEdge(v0, v1);
+        auto result = dfs(multi, v0);
         std::unordered_set<int> expected = {0,1,2};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -69,19 +100,18 @@ TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
     }
 
     SECTION("Handles self-loops") {
-        std::vector<bool> matrix = {
+        std::vector<bool> mat = {
             0,1,0,
             1,0,1,
             0,1,0
         };
-        auto simple = Graph::fromAdjacencyMatrix(matrix, 3);
-        REQUIRE(simple.has_value());
-        UndirectedPseudoGraph<int, void> g(simple->baseMultiGraph().basePseudoGraph());
-        auto gv = UniqueVertexIndexedView(g);
-        auto v1 = *gv.findVertex(1);
-        g.addEdge(v1, v1);
-        auto v0 = *gv.findVertex(0);
-        auto result = dfs(g, v0);
+        auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
+        UndirectedPseudoGraph<int, void> pseudo(simple.baseMultiGraph().basePseudoGraph());
+        auto view = UniqueVertexIndexedView(pseudo);
+        auto v1 = *view.findVertex(1);
+        pseudo.addEdge(v1, v1); // self-loop
+        auto v0 = *view.findVertex(0);
+        auto result = dfs(pseudo, v0);
         std::unordered_set<int> expected = {0,1,2};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -90,8 +120,6 @@ TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
 }
 
 TEST_CASE("DFS on directed graph", "[dfs][directed]") {
-    using Graph = DirectedGraph<int, void>;
-
     SECTION("Simple DAG") {
         std::vector<std::vector<bool>> mat = {
             {0,1,1,0},
@@ -99,10 +127,9 @@ TEST_CASE("DFS on directed graph", "[dfs][directed]") {
             {0,0,0,0},
             {0,0,0,0}
         };
-        auto g = Graph::fromAdjacencyMatrix(mat);
-        REQUIRE(g.has_value());
-        auto start = *g->beginVertices(); // 0
-        auto result = dfs(*g, start);
+        auto g = makeDirectedGraphFromBoolMatrix(mat);
+        auto start = *g.beginVertices(); // 0
+        auto result = dfs(g, start);
         std::unordered_set<int> expected = {0,1,2,3};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -116,10 +143,9 @@ TEST_CASE("DFS on directed graph", "[dfs][directed]") {
             {0,0,0,1},
             {0,0,0,0}
         };
-        auto g = Graph::fromAdjacencyMatrix(mat);
-        REQUIRE(g.has_value());
-        auto start = *g->beginVertices(); // 0
-        auto result = dfs(*g, start);
+        auto g = makeDirectedGraphFromBoolMatrix(mat);
+        auto start = *g.beginVertices(); // 0
+        auto result = dfs(g, start);
         std::unordered_set<int> expected = {0,1};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -132,10 +158,9 @@ TEST_CASE("DFS on directed graph", "[dfs][directed]") {
             {0,0,1},
             {1,0,0}
         };
-        auto g = Graph::fromAdjacencyMatrix(mat);
-        REQUIRE(g.has_value());
-        auto start = *g->beginVertices(); // 0
-        auto result = dfs(*g, start);
+        auto g = makeDirectedGraphFromBoolMatrix(mat);
+        auto start = *g.beginVertices(); // 0
+        auto result = dfs(g, start);
         std::unordered_set<int> expected = {0,1,2};
         std::unordered_set<int> got;
         for (auto v : result) got.insert(v.data());
@@ -148,7 +173,7 @@ TEST_CASE("DFS on directed graph", "[dfs][directed]") {
         auto v1 = pseudo.addVertex(1);
         auto v2 = pseudo.addVertex(2);
         pseudo.addArc(v0, v1);
-        pseudo.addArc(v0, v1);
+        pseudo.addArc(v0, v1); // parallel
         pseudo.addArc(v1, v2);
         DirectedGraph<int, void> g(pseudo);
         auto result = dfs(g, v0);
