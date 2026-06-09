@@ -8,19 +8,9 @@
 
 #include "../undirected/UndirectedGraph.hpp"
 #include "../details/graph_concepts.hpp"
+#include "../details/errors.hpp"
 
 namespace exx::incident {
-
-enum class PrimError {
-    DisconnectedGraph
-};
-
-inline std::string to_string(PrimError e) {
-    switch (e) {
-    case PrimError::DisconnectedGraph: return "Graph is disconnected.";
-    default:                           return "Unknown error";
-    }
-}
 
 template<UndirectedGraphConcept G>
     requires std::is_copy_constructible_v<typename G::EdgeValueType>

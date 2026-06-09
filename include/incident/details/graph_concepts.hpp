@@ -82,6 +82,46 @@ concept UndirectedGraphConcept = GraphConcept<G> &&
     { cg.edgeCount() } -> std::integral;
 };
 
+template<typename G>
+concept DirectedGraphConcept = GraphConcept<G> &&
+                               requires(G& g, const G& cg, typename G::ArcDescriptor a)
+{
+    typename G::ArcValueType;
+    typename G::ArcDescriptor;
+    typename G::ConstArcDescriptor;
+
+    requires std::copyable<typename G::ArcDescriptor>;
+    requires std::equality_comparable<typename G::ArcDescriptor>;
+    requires std::convertible_to<typename G::ArcDescriptor, typename G::ConstArcDescriptor>;
+
+    { a.data() } -> std::convertible_to<const typename G::ArcValueType&>;
+    { a.from() } -> std::convertible_to<typename G::ConstVertexDescriptor>;
+    { a.to() }   -> std::convertible_to<typename G::ConstVertexDescriptor>;
+
+    { g.arcs() } -> std::ranges::range;
+    { cg.arcs() } -> std::ranges::range;
+
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(g.arcs())>,
+        typename G::ArcDescriptor
+        >;
+    requires std::convertible_to<
+        std::ranges::range_reference_t<decltype(cg.arcs())>,
+        typename G::ConstArcDescriptor
+        >;
+
+    typename G::ArcIterator;
+    typename G::ConstArcIterator;
+
+    { g.beginArcs() } -> std::forward_iterator;
+    { g.endArcs() }   -> std::forward_iterator;
+    { cg.beginArcs() } -> std::forward_iterator;
+    { cg.endArcs() }   -> std::forward_iterator;
+
+    { g.arcCount() } -> std::integral;
+    { cg.arcCount() } -> std::integral;
+};
+
 } // namespace exx::incident
 
 #endif // EXX_GRAPHCONCEPTS_HPP

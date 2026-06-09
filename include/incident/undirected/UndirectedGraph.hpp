@@ -6,26 +6,9 @@
 
 #include "UndirectedMultiGraph.hpp"
 #include "../details/Matrix.hpp"
+#include "../details/errors.hpp"
 
 namespace exx::incident {
-
-enum class GraphBuildingError {
-    NullPointer,
-    EmptyVector,
-    ZeroSize,
-    NonSquareMatrix
-};
-
-inline std::string to_string(GraphBuildingError error) noexcept {
-    using enum GraphBuildingError;
-    switch (error) {
-    case GraphBuildingError::NullPointer:          return "NullPointer: input matrix pointer is null";
-    case GraphBuildingError::EmptyVector:          return "EmptVector: there are no data in vector";
-    case GraphBuildingError::ZeroSize:             return "ZeroSize: matrix size is zero";
-    case GraphBuildingError::NonSquareMatrix:      return "NonSquareMatrix: matrix is not square";
-    default:                                       return "Unknown error";
-    }
-}
 
 template<typename VertexData, typename EdgeData>
 class UndirectedGraph {
