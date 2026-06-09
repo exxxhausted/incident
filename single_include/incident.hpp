@@ -1455,6 +1455,30 @@ public:
     }
 
     bool empty() const { return _vertices.empty(); }
+
+    bool rotateArc(ArcDescriptor arc) {
+        if (arc._label->_from == arc._label->_to) return false;
+
+        VertexLabel oldFrom = arc._label->_from;
+        VertexLabel oldTo   = arc._label->_to;
+
+        auto itFrom = arc._label->_meta._posInFrom;
+        oldTo->_outgoingArcs.splice(oldTo->_outgoingArcs.end(),
+                                    oldFrom->_outgoingArcs,
+                                    itFrom);
+        arc._label->_meta._posInFrom = std::prev(oldTo->_outgoingArcs.end());
+
+        auto itTo = arc._label->_meta._posInTo;
+        oldFrom->_incomingArcs.splice(oldFrom->_incomingArcs.end(),
+                                      oldTo->_incomingArcs,
+                                      itTo);
+        arc._label->_meta._posInTo = std::prev(oldFrom->_incomingArcs.end());
+
+        arc._label->_from = oldTo;
+        arc._label->_to   = oldFrom;
+
+        return true;
+    }
 };
 
 } // namespace exx::incident
@@ -1572,6 +1596,8 @@ public:
     void clear() { _pseudoGraph.clear(); }
 
     bool empty() const { return _pseudoGraph.empty(); }
+
+    bool roteteArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
 
 private:
 
@@ -1694,6 +1720,8 @@ public:
     void clear() { _multiGraph.clear(); }
 
     bool empty() const { return _multiGraph.empty(); }
+
+    bool roteteArc(ArcDescriptor a) { return _multiGraph.rotateArc(a); }
 
     template <typename T = ArcData>
         requires (!std::is_void_v<ArcData>)

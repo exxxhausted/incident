@@ -115,6 +115,8 @@ public:
 
     bool empty() const { return _pseudoGraph.empty(); }
 
+    bool roteteArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
+
 private:
 
     DirectedPseudoGraph<VertexData, ArcData> _pseudoGraph;

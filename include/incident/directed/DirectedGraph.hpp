@@ -118,6 +118,8 @@ public:
 
     bool empty() const { return _multiGraph.empty(); }
 
+    bool roteteArc(ArcDescriptor a) { return _multiGraph.rotateArc(a); }
+
     template <typename T = ArcData>
         requires (!std::is_void_v<ArcData>)
     Matrix<T> toAdjacencyMatrix(T default_value = T{}) const {

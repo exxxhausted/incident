@@ -428,6 +428,58 @@ TEST_CASE("DirectedPseudoGraph descriptors", "[directed][pseudograph][descriptor
         REQUIRE(copy != aAB2);
     }
 
+    SECTION("rotateArc changes direction correctly") {
+        SECTION("Rotate non-loop arc") {
+            auto arc = aAB1;
+            bool rotated = g.rotateArc(arc);
+            REQUIRE(rotated);
+
+            REQUIRE(arc.from() == vB);
+            REQUIRE(arc.to()   == vA);
+            REQUIRE(arc.data() == 10);
+
+            REQUIRE(vA.outDegree() == 2);
+            REQUIRE(vA.inDegree()  == 2);
+            REQUIRE(vB.outDegree() == 2);
+            REQUIRE(vB.inDegree()  == 1);
+
+            bool foundInBOut = false;
+            for (auto a : vB.outgoingArcs())
+                if (a == arc) foundInBOut = true;
+            REQUIRE(foundInBOut);
+
+            bool foundInAIn = false;
+            for (auto a : vA.incomingArcs())
+                if (a == arc) foundInAIn = true;
+            REQUIRE(foundInAIn);
+
+            g.rotateArc(arc);
+        }
+
+        SECTION("Rotate self-loop does nothing") {
+            auto loop = aLoop;
+            bool rotated = g.rotateArc(loop);
+            REQUIRE_FALSE(rotated);
+            REQUIRE(loop.from() == vA);
+            REQUIRE(loop.to()   == vA);
+            REQUIRE(vA.outDegree() == 3);
+            REQUIRE(vA.inDegree()  == 1);
+        }
+
+        SECTION("Rotate arc and then findArc works") {
+            auto arc = aBC;
+            g.rotateArc(arc);
+            REQUIRE(g.hasArc(vC, vB));
+            REQUIRE_FALSE(g.hasArc(vB, vC));
+
+            auto found = g.findArc(vC, vB);
+            REQUIRE(found.has_value());
+            REQUIRE(found->data() == 40);
+
+            g.rotateArc(arc);
+        }
+    }
+
     SECTION("Const descriptors") {
         const Graph& cg = g;
         ConstVertexDesc cvA, cvB;
