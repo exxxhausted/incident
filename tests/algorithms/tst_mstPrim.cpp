@@ -6,8 +6,6 @@
 #include "incident/undirected/UndirectedMultiGraph.hpp"
 #include "incident/undirected/UndirectedPseudoGraph.hpp"
 
-#include "incident/utility/UniqueVertexIndexedView.hpp"
-
 using namespace exx::incident;
 
 template<typename G>
@@ -16,9 +14,7 @@ auto totalWeight(const G& g)
     typename G::EdgeValueType sum{};
 
     for (auto e : g.edges())
-    {
         sum += e.data();
-    }
 
     return sum;
 }
@@ -120,8 +116,12 @@ TEST_CASE("Prim", "[prim][undirected]") {
 
         UndirectedPseudoGraph<int, int> g(simple.baseMultiGraph().basePseudoGraph());
 
-        auto gv = UniqueVertexIndexedView(g);
-        auto v1 = *gv.findVertex(1);
+        // Build local index map from vertex data to descriptor
+        std::unordered_map<int, UndirectedPseudoGraph<int, int>::VertexDescriptor> desc;
+        for (auto v : g.vertices())
+            desc[v.data()] = v;
+
+        auto v1 = desc[1];
         g.addEdge(v1, v1, 100);
 
         auto mstExpected = mstPrim(g);
@@ -153,9 +153,13 @@ TEST_CASE("Prim", "[prim][undirected]") {
         auto simple = makeGraphFromMatrix<int, int>(matrix, 3);
         UndirectedMultiGraph<int, int> g(simple.baseMultiGraph());
 
-        auto gv = UniqueVertexIndexedView(g);
-        auto v0 = *gv.findVertex(0);
-        auto v1 = *gv.findVertex(1);
+        // Build local index map
+        std::unordered_map<int, UndirectedMultiGraph<int, int>::VertexDescriptor> desc;
+        for (auto v : g.vertices())
+            desc[v.data()] = v;
+
+        auto v0 = desc[0];
+        auto v1 = desc[1];
         g.addEdge(v0, v1, 1);
 
         auto mstExpected = mstPrim(g);

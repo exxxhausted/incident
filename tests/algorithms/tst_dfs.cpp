@@ -2,15 +2,14 @@
 
 #include <unordered_set>
 #include <vector>
+#include <unordered_map>
 
 #include "incident/algorithms/dfs.hpp"
 #include "incident/undirected/UndirectedGraph.hpp"
 #include "incident/undirected/UndirectedMultiGraph.hpp"
 #include "incident/undirected/UndirectedPseudoGraph.hpp"
 #include "incident/directed/DirectedGraph.hpp"
-#include "incident/directed/DirectedMultiGraph.hpp"
 #include "incident/directed/DirectedPseudoGraph.hpp"
-#include "incident/utility/UniqueVertexIndexedView.hpp"
 
 using namespace exx::incident;
 
@@ -29,7 +28,6 @@ static UndirectedGraph<int, void> makeUndirectedGraphFromBoolMatrix(const std::v
     return g;
 }
 
-// ------------------------------------------------------------
 static DirectedGraph<int, void> makeDirectedGraphFromBoolMatrix(const std::vector<std::vector<bool>>& matrix)
 {
     std::size_t n = matrix.size();
@@ -87,9 +85,14 @@ TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
         };
         auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
         UndirectedMultiGraph<int, void> multi(simple.baseMultiGraph());
-        auto view = UniqueVertexIndexedView(multi);
-        auto v0 = *view.findVertex(0);
-        auto v1 = *view.findVertex(1);
+
+        // Build local index map
+        std::unordered_map<int, UndirectedMultiGraph<int, void>::VertexDescriptor> desc;
+        for (auto v : multi.vertices())
+            desc[v.data()] = v;
+
+        auto v0 = desc[0];
+        auto v1 = desc[1];
         multi.addEdge(v0, v1); // parallel edge
         multi.addEdge(v0, v1);
         auto result = dfs(multi, v0);
@@ -107,10 +110,14 @@ TEST_CASE("DFS on undirected graph", "[dfs][undirected]") {
         };
         auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
         UndirectedPseudoGraph<int, void> pseudo(simple.baseMultiGraph().basePseudoGraph());
-        auto view = UniqueVertexIndexedView(pseudo);
-        auto v1 = *view.findVertex(1);
+
+        std::unordered_map<int, UndirectedPseudoGraph<int, void>::VertexDescriptor> desc;
+        for (auto v : pseudo.vertices())
+            desc[v.data()] = v;
+
+        auto v1 = desc[1];
         pseudo.addEdge(v1, v1); // self-loop
-        auto v0 = *view.findVertex(0);
+        auto v0 = desc[0];
         auto result = dfs(pseudo, v0);
         std::unordered_set<int> expected = {0,1,2};
         std::unordered_set<int> got;

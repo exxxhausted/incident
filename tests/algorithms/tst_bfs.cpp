@@ -2,15 +2,14 @@
 
 #include <set>
 #include <vector>
+#include <unordered_map>
 
 #include "incident/algorithms/bfs.hpp"
 #include "incident/undirected/UndirectedGraph.hpp"
 #include "incident/undirected/UndirectedMultiGraph.hpp"
 #include "incident/undirected/UndirectedPseudoGraph.hpp"
 #include "incident/directed/DirectedGraph.hpp"
-#include "incident/directed/DirectedMultiGraph.hpp"
 #include "incident/directed/DirectedPseudoGraph.hpp"
-#include "incident/utility/UniqueVertexIndexedView.hpp"
 
 using namespace exx::incident;
 
@@ -46,11 +45,9 @@ static DirectedGraph<int, void> makeDirectedGraphFromBoolMatrix(const std::vecto
 
 TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
     SECTION("BFS on simple connected graph") {
-        /*
-            0 -- 1 -- 3
-            |    |
-            2 __/
-        */
+        // 0 -- 1 -- 3
+        // |    |
+        // 2 __/
         std::vector<bool> mat = {
             0,1,1,0,
             1,0,1,1,
@@ -58,7 +55,7 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
             0,1,0,0
         };
         auto g = makeUndirectedGraphFromBoolMatrix(mat, 4);
-        auto start = *g.beginVertices(); // 0
+        auto start = *g.beginVertices(); // вершина 0
         auto result = bfs(g, start);
 
         REQUIRE(result.size() == 4);
@@ -69,9 +66,7 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
     }
 
     SECTION("BFS handles disconnected graph") {
-        /*
-        0 -- 1    2 -- 3
-        */
+        // 0 -- 1    2 -- 3
         std::vector<bool> mat = {
             0,1,0,0,
             1,0,0,0,
@@ -87,16 +82,19 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
     }
 
     SECTION("BFS ignores multiedge revisits") {
-        /*
-        Base: 0-1-2, add extra parallel edges 0-1
-        */
+        // Base: 0=1-2, добавим параллельные рёбра 0-1
         std::vector<bool> mat = {0,1,0, 1,0,1, 0,1,0};
         auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
         UndirectedMultiGraph<int, void> multi(simple.baseMultiGraph());
-        auto view = UniqueVertexIndexedView(multi);
-        auto v0 = *view.findVertex(0);
-        auto v1 = *view.findVertex(1);
-        multi.addEdge(v0, v1);
+
+        // Сохраним отображение индекс -> дескриптор
+        std::unordered_map<int, decltype(multi)::VertexDescriptor> desc;
+        for (auto v : multi.vertices())
+            desc[v.data()] = v;
+
+        auto v0 = desc[0];
+        auto v1 = desc[1];
+        multi.addEdge(v0, v1); // параллельное ребро
         multi.addEdge(v0, v1);
         auto result = bfs(multi, v0);
         REQUIRE(result.size() == 3);
@@ -106,16 +104,18 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
     }
 
     SECTION("BFS handles self-loops") {
-        /*
-        Base: 0-1-2, add self-loop on 1
-        */
+        // Base: 0-1-2, добавим петлю на вершине 1
         std::vector<bool> mat = {0,1,0, 1,0,1, 0,1,0};
         auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
         UndirectedPseudoGraph<int, void> pseudo(simple.baseMultiGraph().basePseudoGraph());
-        auto view = UniqueVertexIndexedView(pseudo);
-        auto v1 = *view.findVertex(1);
+
+        std::unordered_map<int, decltype(pseudo)::VertexDescriptor> desc;
+        for (auto v : pseudo.vertices())
+            desc[v.data()] = v;
+
+        auto v1 = desc[1];
         pseudo.addEdge(v1, v1);
-        auto v0 = *view.findVertex(0);
+        auto v0 = desc[0];
         auto result = bfs(pseudo, v0);
         REQUIRE(result.size() == 3);
         REQUIRE(result[0].data() == 0);
@@ -126,12 +126,10 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
 
 TEST_CASE("BFS on directed graph", "[bfs][directed]") {
     SECTION("Simple DAG") {
-        /*
-        0 -> 1 -> 3
-        |    |
-        v    v
-        2 <--
-        */
+        // 0 -> 1 -> 3
+        // |    |
+        // v    v
+        // 2 <--
         std::vector<std::vector<bool>> mat = {
             {0,1,1,0},
             {0,0,1,1},
@@ -149,9 +147,7 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
     }
 
     SECTION("Disconnected directed graph") {
-        /*
-        Comp1: 0->1, Comp2: 2->3
-        */
+        // Comp1: 0->1, Comp2: 2->3
         std::vector<std::vector<bool>> mat = {
             {0,1,0,0},
             {0,0,0,0},
@@ -167,11 +163,9 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
     }
 
     SECTION("Graph with cycle") {
-        /*
-        0 -> 1 -> 2
-        ^         |
-        |_________|
-        */
+        // 0 -> 1 -> 2
+        // ^         |
+        // |_________|
         std::vector<std::vector<bool>> mat = {
             {0,1,0},
             {0,0,1},
@@ -192,7 +186,7 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
         auto v1 = pseudo.addVertex(1);
         auto v2 = pseudo.addVertex(2);
         pseudo.addArc(v0, v1);
-        pseudo.addArc(v0, v1); // parallel
+        pseudo.addArc(v0, v1); // параллельная дуга
         pseudo.addArc(v1, v2);
         DirectedGraph<int, void> g(pseudo);
         auto result = bfs(g, v0);
