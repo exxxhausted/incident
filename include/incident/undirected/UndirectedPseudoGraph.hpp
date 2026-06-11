@@ -130,12 +130,12 @@ private:
         }
 
         std::vector<VertexDescriptorImpl> adjacentVertices() const {
-            std::unordered_set<VertexDescriptor> unique;
+            std::unordered_set<VertexDescriptorImpl> unique;
             for (const auto& e : incidentEdges()) {
                 auto other = e.otherEnd(*this);
                 unique.insert(*other);
             }
-            return std::vector<VertexDescriptor>(unique.begin(), unique.end());
+            return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
         bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }

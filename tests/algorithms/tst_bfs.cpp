@@ -56,13 +56,22 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
         };
         auto g = makeUndirectedGraphFromBoolMatrix(mat, 4);
         auto start = *g.beginVertices(); // вершина 0
-        auto result = bfs(g, start);
+        auto bfs_result = bfs(g, start);
 
-        REQUIRE(result.size() == 4);
-        REQUIRE(result[0].data() == 0);
-        std::set<int> level1 = {result[1].data(), result[2].data()};
-        REQUIRE(level1 == std::set<int>{1,2});
-        REQUIRE(result[3].data() == 3);
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 4);
+        REQUIRE(order[0].data() == 0);
+
+        // Второй слой (глубина 1) должен содержать 1 и 2 в любом порядке
+        std::set<int> depth1_vertices;
+        for (auto v : order) {
+            if (*bfs_result.depth(v) == 1)
+                depth1_vertices.insert(v.data());
+        }
+        REQUIRE(depth1_vertices == std::set<int>{1, 2});
+        // Глубина 3: вершина 3
+        REQUIRE(*bfs_result.depth(order[3]) == 2); // расстояние от 0 до 3 равно 2
+        REQUIRE(order[3].data() == 3);
     }
 
     SECTION("BFS handles disconnected graph") {
@@ -75,14 +84,21 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
         };
         auto g = makeUndirectedGraphFromBoolMatrix(mat, 4);
         auto start = *g.beginVertices(); // 0
-        auto result = bfs(g, start);
-        REQUIRE(result.size() == 2);
-        REQUIRE(result[0].data() == 0);
-        REQUIRE(result[1].data() == 1);
+        auto bfs_result = bfs(g, start);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 2);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        // Вершины 2 и 3 недостижимы
+        for (auto v : g.vertices()) {
+            if (v.data() == 2 || v.data() == 3)
+                REQUIRE(!bfs_result.isReachable(v));
+        }
     }
 
     SECTION("BFS ignores multiedge revisits") {
-        // Base: 0=1-2, добавим параллельные рёбра 0-1
+        // Base: 0-1-2, добавим параллельные рёбра 0-1
         std::vector<bool> mat = {0,1,0, 1,0,1, 0,1,0};
         auto simple = makeUndirectedGraphFromBoolMatrix(mat, 3);
         UndirectedMultiGraph<int, void> multi(simple.baseMultiGraph());
@@ -96,11 +112,16 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
         auto v1 = desc[1];
         multi.addEdge(v0, v1); // параллельное ребро
         multi.addEdge(v0, v1);
-        auto result = bfs(multi, v0);
-        REQUIRE(result.size() == 3);
-        REQUIRE(result[0].data() == 0);
-        REQUIRE(result[1].data() == 1);
-        REQUIRE(result[2].data() == 2);
+        auto bfs_result = bfs(multi, v0);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 3);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        REQUIRE(order[2].data() == 2);
+        // Проверим, что глубина увеличилась корректно
+        REQUIRE(*bfs_result.depth(v1) == 1);
+        REQUIRE(*bfs_result.depth(desc[2]) == 2);
     }
 
     SECTION("BFS handles self-loops") {
@@ -116,11 +137,14 @@ TEST_CASE("BFS on undirected graph", "[bfs][undirected]") {
         auto v1 = desc[1];
         pseudo.addEdge(v1, v1);
         auto v0 = desc[0];
-        auto result = bfs(pseudo, v0);
-        REQUIRE(result.size() == 3);
-        REQUIRE(result[0].data() == 0);
-        REQUIRE(result[1].data() == 1);
-        REQUIRE(result[2].data() == 2);
+        auto bfs_result = bfs(pseudo, v0);
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 3);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        REQUIRE(order[2].data() == 2);
+        // Петля не должна повлиять на глубину
+        REQUIRE(*bfs_result.depth(v1) == 1);
     }
 }
 
@@ -138,12 +162,23 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
         };
         auto g = makeDirectedGraphFromBoolMatrix(mat);
         auto start = *g.beginVertices(); // 0
-        auto result = bfs(g, start);
-        REQUIRE(result.size() == 4);
-        REQUIRE(result[0].data() == 0);
-        std::set<int> secondLayer = {result[1].data(), result[2].data()};
-        REQUIRE(secondLayer == std::set<int>{1,2});
-        REQUIRE(result[3].data() == 3);
+        auto bfs_result = bfs(g, start);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 4);
+        REQUIRE(order[0].data() == 0);
+
+        // Второй слой: 1 и 2 (глубина 1)
+        std::set<int> depth1_vertices;
+        for (auto v : order) {
+            if (*bfs_result.depth(v) == 1)
+                depth1_vertices.insert(v.data());
+        }
+        REQUIRE(depth1_vertices == std::set<int>{1, 2});
+
+        // Вершина 3 на глубине 2
+        REQUIRE(*bfs_result.depth(order[3]) == 2);
+        REQUIRE(order[3].data() == 3);
     }
 
     SECTION("Disconnected directed graph") {
@@ -156,10 +191,17 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
         };
         auto g = makeDirectedGraphFromBoolMatrix(mat);
         auto start = *g.beginVertices(); // 0
-        auto result = bfs(g, start);
-        REQUIRE(result.size() == 2);
-        REQUIRE(result[0].data() == 0);
-        REQUIRE(result[1].data() == 1);
+        auto bfs_result = bfs(g, start);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 2);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        // Вершины 2 и 3 недостижимы
+        for (auto v : g.vertices()) {
+            if (v.data() == 2 || v.data() == 3)
+                REQUIRE(!bfs_result.isReachable(v));
+        }
     }
 
     SECTION("Graph with cycle") {
@@ -173,11 +215,18 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
         };
         auto g = makeDirectedGraphFromBoolMatrix(mat);
         auto start = *g.beginVertices(); // 0
-        auto result = bfs(g, start);
-        REQUIRE(result.size() == 3);
-        REQUIRE(result[0].data() == 0);
-        std::set<int> rest = {result[1].data(), result[2].data()};
-        REQUIRE(rest == std::set<int>{1,2});
+        auto bfs_result = bfs(g, start);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 3);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        REQUIRE(order[2].data() == 2);
+
+        // Глубины: 0 на глубине 0, 1 на глубине 1, 2 на глубине 2
+        REQUIRE(*bfs_result.depth(order[0]) == 0);
+        REQUIRE(*bfs_result.depth(order[1]) == 1);
+        REQUIRE(*bfs_result.depth(order[2]) == 2);
     }
 
     SECTION("Multiple arcs (parallel) ignored") {
@@ -189,11 +238,15 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
         pseudo.addArc(v0, v1); // параллельная дуга
         pseudo.addArc(v1, v2);
         DirectedGraph<int, void> g(pseudo);
-        auto result = bfs(g, v0);
-        REQUIRE(result.size() == 3);
-        REQUIRE(result[0].data() == 0);
-        REQUIRE(result[1].data() == 1);
-        REQUIRE(result[2].data() == 2);
+        auto bfs_result = bfs(g, v0);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 3);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        REQUIRE(order[2].data() == 2);
+        REQUIRE(*bfs_result.depth(v1) == 1);
+        REQUIRE(*bfs_result.depth(v2) == 2);
     }
 
     SECTION("Self-loop does not cause infinite loop") {
@@ -203,9 +256,14 @@ TEST_CASE("BFS on directed graph", "[bfs][directed]") {
         pseudo.addArc(v0, v0);
         pseudo.addArc(v0, v1);
         DirectedGraph<int, void> g(pseudo);
-        auto result = bfs(g, v0);
-        REQUIRE(result.size() == 2);
-        REQUIRE(result[0].data() == 0);
-        REQUIRE(result[1].data() == 1);
+        auto bfs_result = bfs(g, v0);
+
+        const auto& order = bfs_result.order();
+        REQUIRE(order.size() == 2);
+        REQUIRE(order[0].data() == 0);
+        REQUIRE(order[1].data() == 1);
+        REQUIRE(*bfs_result.depth(v1) == 1);
+        // Петля не создала дополнительных вершин
+        REQUIRE(!bfs_result.parent(v0).has_value()); // у корня нет родителя
     }
 }

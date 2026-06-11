@@ -38,6 +38,35 @@ auto dfs(Graph& G, typename Graph::VertexDescriptor start)
     return res;
 }
 
+template<GraphConcept Graph>
+auto dfs(const Graph& G, typename Graph::ConstVertexDescriptor start)
+    ->std::vector<typename Graph::ConstVertexDescriptor>
+{
+    using Descriptor = typename Graph::ConstVertexDescriptor;
+
+    std::stack<Descriptor> stack;
+    std::unordered_set<Descriptor> visited;
+    std::vector<Descriptor> res;
+
+    stack.push(start);
+
+    while(!stack.empty()) {
+        auto current = stack.top();
+        stack.pop();
+
+        if(!visited.contains(current)) {
+            visited.insert(current);
+
+            res.push_back(current);
+
+            for(auto adjV : current.adjacentVertices())
+                if(!visited.contains(adjV)) stack.push(adjV);
+        }
+    }
+
+    return res;
+}
+
 } // namespace exx::incident
 
 #endif // EXX_DFS_HPP
