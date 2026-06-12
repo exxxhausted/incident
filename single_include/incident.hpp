@@ -1593,8 +1593,6 @@ concept GraphConcept = requires(G& g, const G& cg, typename G::VertexDescriptor 
     requires std::equality_comparable<typename G::VertexDescriptor>;
     requires std::convertible_to<typename G::VertexDescriptor, typename G::ConstVertexDescriptor>;
 
-    { v.data() } -> std::convertible_to<const typename G::VertexValueType&>;
-
     { g.vertices() } -> std::ranges::range;
     { cg.vertices() } -> std::ranges::range;
 
@@ -1631,7 +1629,6 @@ concept UndirectedGraphConcept = GraphConcept<G> &&
     requires std::equality_comparable<typename G::EdgeDescriptor>;
     requires std::convertible_to<typename G::EdgeDescriptor, typename G::ConstEdgeDescriptor>;
 
-    { e.data() } -> std::convertible_to<const typename G::EdgeValueType&>;
     { e.u() } -> std::convertible_to<typename G::ConstVertexDescriptor>;
     { e.v() } -> std::convertible_to<typename G::ConstVertexDescriptor>;
 
@@ -1671,7 +1668,6 @@ concept DirectedGraphConcept = GraphConcept<G> &&
     requires std::equality_comparable<typename G::ArcDescriptor>;
     requires std::convertible_to<typename G::ArcDescriptor, typename G::ConstArcDescriptor>;
 
-    { a.data() } -> std::convertible_to<const typename G::ArcValueType&>;
     { a.from() } -> std::convertible_to<typename G::ConstVertexDescriptor>;
     { a.to() }   -> std::convertible_to<typename G::ConstVertexDescriptor>;
 
