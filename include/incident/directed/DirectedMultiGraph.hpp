@@ -118,6 +118,7 @@ public:
 
     bool empty() const { return _pseudoGraph.empty(); }
 
+    [[maybe_unused]]
     bool rotateArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
 
 private:

@@ -138,8 +138,10 @@ private:
             return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
-        bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const VertexDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
     };
@@ -182,8 +184,10 @@ private:
                 return std::nullopt;
         }
 
-        bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const EdgeDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const EdgeDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = EdgeDescriptorHash;
     };
@@ -220,8 +224,10 @@ private:
         VertexIteratorImpl& operator++() { ++_it; return *this; }
         VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const VertexIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const VertexIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -256,8 +262,10 @@ private:
         EdgeIteratorImpl& operator++() { ++_it; return *this; }
         EdgeIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const EdgeIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const EdgeIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const EdgeIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const EdgeIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
 public:

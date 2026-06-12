@@ -117,6 +117,7 @@ public:
 
     bool empty() const { return _multiGraph.empty(); }
 
+    [[maybe_unused]]
     bool rotateArc(ArcDescriptor a) { return _multiGraph.rotateArc(a); }
 
 private:

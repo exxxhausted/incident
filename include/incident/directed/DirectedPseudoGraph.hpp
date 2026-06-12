@@ -151,8 +151,10 @@ private:
             return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
-        bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const VertexDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
     };
@@ -204,8 +206,10 @@ private:
                 return std::nullopt;
         }
 
-        bool operator==(const ArcDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const ArcDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const ArcDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const ArcDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = ArcDescriptorHash;
     };
@@ -242,8 +246,10 @@ private:
         VertexIteratorImpl& operator++() { ++_it; return *this; }
         VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const VertexIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const VertexIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -278,8 +284,10 @@ private:
         ArcIteratorImpl& operator++() { ++_it; return *this; }
         ArcIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const ArcIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const ArcIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const ArcIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const ArcIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
 public:
@@ -470,6 +478,7 @@ public:
 
     bool empty() const { return _vertices.empty(); }
 
+    [[maybe_unused]]
     bool rotateArc(ArcDescriptor arc) {
         if (arc._label->_from == arc._label->_to) return false;
 

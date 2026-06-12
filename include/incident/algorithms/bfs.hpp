@@ -5,109 +5,119 @@
 #include <optional>
 #include <unordered_map>
 #include <forward_list>
+#include <vector>
 
 #include "../details/graph_concepts.hpp"
 
 namespace exx::incident {
 
 template<GraphConcept Graph>
-class BfsTree {
-    using Descriptor = Graph::ConstVertexDescriptor;
+class BfsForest {
+    using Descriptor = typename Graph::ConstVertexDescriptor;
 public:
-
     bool isReachable(Descriptor v) const { return _ht.at(v)._color == Color::Black; }
 
-    std::optional<Descriptor> parent(Descriptor v) const {
-        if(_ht.at(v)._depth == 0) return std::nullopt;
-        if(_ht.at(v)._color != Color::White) return _ht.at(v)._parent;
-        return std::nullopt;
-    }
+    std::optional<Descriptor> parent(Descriptor v) const { return _ht.at(v)._parent; }
 
-    std::optional<std::size_t> depth(Descriptor v) const {
-        if(_ht.at(v)._color != Color::Black) return std::nullopt;
-        return _ht.at(v)._depth;
-    }
+    std::optional<std::size_t> depth(Descriptor v) const { return _ht.at(v)._depth; }
 
-    std::forward_list<Descriptor> path(Descriptor v) const  {
+    auto path(Descriptor v) const
+        -> std::optional<std::forward_list<Descriptor>>
+    {
+        if (!isReachable(v)) return std::nullopt;
         std::forward_list<Descriptor> res;
         auto cur = v;
-
         while (true) {
             res.push_front(cur);
             auto p = parent(cur);
             if (!p) break;
             cur = *p;
         }
-
-        return res;
-    }
-
-    std::vector<Descriptor> layer(std::size_t d) const {
-        std::vector<Descriptor> res;
-
-        for(const auto& [v, data] : _ht)
-            if(data._color == Color::Black && data._depth == d) res.push_back(v);
-
         return res;
     }
 
     const std::vector<Descriptor>& order() const { return _order; }
 
+    std::vector<Descriptor> roots() const {
+        std::vector<Descriptor> r;
+
+        for (const auto& [v, data] : _ht)
+            if (data._color == Color::Black && !data._parent.has_value())
+                r.push_back(v);
+
+        return r;
+    }
+
 private:
-    enum class Color {
-        White,
-        Gray,
-        Black
-    };
+    enum class Color { White, Gray, Black };
 
     struct Data {
-        std::size_t _depth = 0;
-        Descriptor _parent = {};
+        std::optional<std::size_t> _depth = std::nullopt;
+        std::optional<Descriptor> _parent = std::nullopt;
         Color _color = Color::White;
     };
 
-    std::unordered_map<Descriptor, Data> _ht = {};
-    std::vector<Descriptor> _order = {};
+    std::unordered_map<Descriptor, Data> _ht;
+    std::vector<Descriptor> _order;
 
     template<GraphConcept G>
-    friend BfsTree<G> bfs(const G& g, G::ConstVertexDescriptor start);
+    friend BfsForest<G> bfs(const G&, const std::vector<typename G::ConstVertexDescriptor>&);
+
 };
 
 template<GraphConcept Graph>
-BfsTree<Graph> bfs(const Graph& G,
-                   typename Graph::ConstVertexDescriptor start)
+BfsForest<Graph> bfs(const Graph& G,
+                     const std::vector<typename Graph::ConstVertexDescriptor>& starts)
 {
     using Descriptor = typename Graph::ConstVertexDescriptor;
-    using Col = BfsTree<Graph>::Color;
+    using Col = typename BfsForest<Graph>::Color;
 
-    BfsTree<Graph> res;
+    BfsForest<Graph> res;
+    for (auto v : G.vertices())
+        res._ht.emplace(v, typename BfsForest<Graph>::Data{});
 
-    for(auto v : G.vertices()) res._ht.insert( { v, {} } );
     res._order.reserve(G.vertexCount());
-
     std::queue<Descriptor> queue;
 
-    queue.push(start);
-    res._ht[start]._color = Col::Gray;
+    for (auto start : starts) {
+        if (res._ht[start]._color != Col::White) continue;
 
-    while(!queue.empty()) {
-        auto current = queue.front();
-        queue.pop();
+        queue.push(start);
+        res._ht[start]._color = Col::Gray;
+        res._ht[start]._depth = 0;
 
-        for(auto adjV : current.adjacentVertices()) {
-            if(res._ht[adjV]._color == Col::White) {
-                res._ht[adjV]._color = Col::Gray;
-                res._ht[adjV]._depth = res._ht[current]._depth + 1;
-                res._ht[adjV]._parent = current;
-                queue.push(adjV);
+        while (!queue.empty()) {
+            auto cur = queue.front();
+            queue.pop();
+
+            for (auto adj : cur.adjacentVertices()) {
+                if (res._ht[adj]._color == Col::White) {
+                    res._ht[adj]._color = Col::Gray;
+                    res._ht[adj]._depth = *res._ht[cur]._depth + 1;
+                    res._ht[adj]._parent = cur;
+                    queue.push(adj);
+                }
             }
-        }
 
-        res._order.push_back(current);
-        res._ht[current]._color = Col::Black;
+            res._order.push_back(cur);
+            res._ht[cur]._color = Col::Black;
+        }
     }
 
     return res;
+}
+
+template<GraphConcept Graph>
+BfsForest<Graph> bfs(const Graph& G, typename Graph::ConstVertexDescriptor start) {
+    return bfs(G, std::vector<typename Graph::ConstVertexDescriptor>{start});
+}
+
+template<GraphConcept Graph>
+BfsForest<Graph> bfs(const Graph& G) {
+    std::vector<typename Graph::ConstVertexDescriptor> all_starts;
+    all_starts.reserve(G.vertexCount());
+    for (auto v : G.vertices()) all_starts.push_back(v);
+    return bfs(G, all_starts);
 }
 
 } // namespace exx::incident

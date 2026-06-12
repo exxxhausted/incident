@@ -193,8 +193,10 @@ private:
             return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
-        bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const VertexDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
     };
@@ -237,8 +239,10 @@ private:
                 return std::nullopt;
         }
 
-        bool operator==(const EdgeDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const EdgeDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const EdgeDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const EdgeDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = EdgeDescriptorHash;
     };
@@ -275,8 +279,10 @@ private:
         VertexIteratorImpl& operator++() { ++_it; return *this; }
         VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const VertexIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const VertexIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -311,8 +317,10 @@ private:
         EdgeIteratorImpl& operator++() { ++_it; return *this; }
         EdgeIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const EdgeIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const EdgeIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const EdgeIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const EdgeIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
 public:
@@ -932,8 +940,10 @@ private:
             return std::vector<VertexDescriptorImpl>(unique.begin(), unique.end());
         }
 
-        bool operator==(const VertexDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const VertexDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const VertexDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
     };
@@ -985,8 +995,10 @@ private:
                 return std::nullopt;
         }
 
-        bool operator==(const ArcDescriptorImpl& other) const { return _label == other._label; }
-        bool operator!=(const ArcDescriptorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const ArcDescriptorImpl<otherConst>& other) const { return _label == other._label; }
+        template<bool otherConst>
+        bool operator!=(const ArcDescriptorImpl<otherConst>& other) const { return !(*this == other); }
 
         using CustomHasherProvidedByExxIncident = ArcDescriptorHash;
     };
@@ -1023,8 +1035,10 @@ private:
         VertexIteratorImpl& operator++() { ++_it; return *this; }
         VertexIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const VertexIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const VertexIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const VertexIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const VertexIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
     template<bool isConst>
@@ -1059,8 +1073,10 @@ private:
         ArcIteratorImpl& operator++() { ++_it; return *this; }
         ArcIteratorImpl operator++(int) { auto tmp = *this; ++*this; return tmp; }
 
-        bool operator==(const ArcIteratorImpl& other) const { return _it == other._it; }
-        bool operator!=(const ArcIteratorImpl& other) const { return !(*this == other); }
+        template<bool otherConst>
+        bool operator==(const ArcIteratorImpl<otherConst>& other) const { return _it == other._it; }
+        template<bool otherConst>
+        bool operator!=(const ArcIteratorImpl<otherConst>& other) const { return !(*this == other); }
     };
 
 public:
@@ -1251,6 +1267,7 @@ public:
 
     bool empty() const { return _vertices.empty(); }
 
+    [[maybe_unused]]
     bool rotateArc(ArcDescriptor arc) {
         if (arc._label->_from == arc._label->_to) return false;
 
@@ -1395,6 +1412,7 @@ public:
 
     bool empty() const { return _pseudoGraph.empty(); }
 
+    [[maybe_unused]]
     bool rotateArc(ArcDescriptor a) { return _pseudoGraph.rotateArc(a); }
 
 private:
@@ -1521,6 +1539,7 @@ public:
 
     bool empty() const { return _multiGraph.empty(); }
 
+    [[maybe_unused]]
     bool rotateArc(ArcDescriptor a) { return _multiGraph.rotateArc(a); }
 
 private:
@@ -1780,107 +1799,117 @@ auto mstPrim(const G& graph)
 #include <optional>
 #include <unordered_map>
 #include <forward_list>
+#include <vector>
 
 namespace exx::incident {
 
 template<GraphConcept Graph>
-class BfsTree {
-    using Descriptor = Graph::ConstVertexDescriptor;
+class BfsForest {
+    using Descriptor = typename Graph::ConstVertexDescriptor;
 public:
-
     bool isReachable(Descriptor v) const { return _ht.at(v)._color == Color::Black; }
 
-    std::optional<Descriptor> parent(Descriptor v) const {
-        if(_ht.at(v)._depth == 0) return std::nullopt;
-        if(_ht.at(v)._color != Color::White) return _ht.at(v)._parent;
-        return std::nullopt;
-    }
+    std::optional<Descriptor> parent(Descriptor v) const { return _ht.at(v)._parent; }
 
-    std::optional<std::size_t> depth(Descriptor v) const {
-        if(_ht.at(v)._color != Color::Black) return std::nullopt;
-        return _ht.at(v)._depth;
-    }
+    std::optional<std::size_t> depth(Descriptor v) const { return _ht.at(v)._depth; }
 
-    std::forward_list<Descriptor> path(Descriptor v) const  {
+    auto path(Descriptor v) const
+        -> std::optional<std::forward_list<Descriptor>>
+    {
+        if (!isReachable(v)) return std::nullopt;
         std::forward_list<Descriptor> res;
         auto cur = v;
-
         while (true) {
             res.push_front(cur);
             auto p = parent(cur);
             if (!p) break;
             cur = *p;
         }
-
-        return res;
-    }
-
-    std::vector<Descriptor> layer(std::size_t d) const {
-        std::vector<Descriptor> res;
-
-        for(const auto& [v, data] : _ht)
-            if(data._color == Color::Black && data._depth == d) res.push_back(v);
-
         return res;
     }
 
     const std::vector<Descriptor>& order() const { return _order; }
 
+    std::vector<Descriptor> roots() const {
+        std::vector<Descriptor> r;
+
+        for (const auto& [v, data] : _ht)
+            if (data._color == Color::Black && !data._parent.has_value())
+                r.push_back(v);
+
+        return r;
+    }
+
 private:
-    enum class Color {
-        White,
-        Gray,
-        Black
-    };
+    enum class Color { White, Gray, Black };
 
     struct Data {
-        std::size_t _depth = 0;
-        Descriptor _parent = {};
+        std::optional<std::size_t> _depth = std::nullopt;
+        std::optional<Descriptor> _parent = std::nullopt;
         Color _color = Color::White;
     };
 
-    std::unordered_map<Descriptor, Data> _ht = {};
-    std::vector<Descriptor> _order = {};
+    std::unordered_map<Descriptor, Data> _ht;
+    std::vector<Descriptor> _order;
 
     template<GraphConcept G>
-    friend BfsTree<G> bfs(const G& g, G::ConstVertexDescriptor start);
+    friend BfsForest<G> bfs(const G&, const std::vector<typename G::ConstVertexDescriptor>&);
+
 };
 
 template<GraphConcept Graph>
-BfsTree<Graph> bfs(const Graph& G,
-                   typename Graph::ConstVertexDescriptor start)
+BfsForest<Graph> bfs(const Graph& G,
+                     const std::vector<typename Graph::ConstVertexDescriptor>& starts)
 {
     using Descriptor = typename Graph::ConstVertexDescriptor;
-    using Col = BfsTree<Graph>::Color;
+    using Col = typename BfsForest<Graph>::Color;
 
-    BfsTree<Graph> res;
+    BfsForest<Graph> res;
+    for (auto v : G.vertices())
+        res._ht.emplace(v, typename BfsForest<Graph>::Data{});
 
-    for(auto v : G.vertices()) res._ht.insert( { v, {} } );
     res._order.reserve(G.vertexCount());
-
     std::queue<Descriptor> queue;
 
-    queue.push(start);
-    res._ht[start]._color = Col::Gray;
+    for (auto start : starts) {
+        if (res._ht[start]._color != Col::White) continue;
 
-    while(!queue.empty()) {
-        auto current = queue.front();
-        queue.pop();
+        queue.push(start);
+        res._ht[start]._color = Col::Gray;
+        res._ht[start]._depth = 0;
 
-        for(auto adjV : current.adjacentVertices()) {
-            if(res._ht[adjV]._color == Col::White) {
-                res._ht[adjV]._color = Col::Gray;
-                res._ht[adjV]._depth = res._ht[current]._depth + 1;
-                res._ht[adjV]._parent = current;
-                queue.push(adjV);
+        while (!queue.empty()) {
+            auto cur = queue.front();
+            queue.pop();
+
+            for (auto adj : cur.adjacentVertices()) {
+                if (res._ht[adj]._color == Col::White) {
+                    res._ht[adj]._color = Col::Gray;
+                    res._ht[adj]._depth = *res._ht[cur]._depth + 1;
+                    res._ht[adj]._parent = cur;
+                    queue.push(adj);
+                }
             }
-        }
 
-        res._order.push_back(current);
-        res._ht[current]._color = Col::Black;
+            res._order.push_back(cur);
+            res._ht[cur]._color = Col::Black;
+        }
     }
 
     return res;
+}
+
+template<GraphConcept Graph>
+BfsForest<Graph> bfs(const Graph& G, typename Graph::ConstVertexDescriptor start) {
+    return bfs(G, std::vector<typename Graph::ConstVertexDescriptor>{start});
+}
+
+template<GraphConcept Graph>
+BfsForest<Graph> bfs(const Graph& G) {
+    std::vector<typename Graph::ConstVertexDescriptor> all_starts;
+    all_starts.reserve(G.vertexCount());
+    for (auto v : G.vertices()) all_starts.push_back(v);
+    return bfs(G, all_starts);
 }
 
 } // namespace exx::incident
@@ -1894,75 +1923,406 @@ BfsTree<Graph> bfs(const Graph& G,
 #ifndef EXX_DFS_HPP
 #define EXX_DFS_HPP
 
+#include <optional>
+#include <unordered_map>
+#include <forward_list>
 #include <vector>
-#include <stack>
-#include <unordered_set>
+#include <functional>
 
 namespace exx::incident {
 
 template<GraphConcept Graph>
-auto dfs(Graph& G, typename Graph::VertexDescriptor start)
-    ->std::vector<typename Graph::VertexDescriptor>
-{
-    using Descriptor = typename Graph::VertexDescriptor;
+class DfsForest {
+    using Descriptor = typename Graph::ConstVertexDescriptor;
+public:
+    bool isReachable(Descriptor v) const { return _ht.at(v)._color != Color::White; }
 
-    std::stack<Descriptor> stack;
-    std::unordered_set<Descriptor> visited;
-    std::vector<Descriptor> res;
+    std::optional<Descriptor> parent(Descriptor v) const { return _ht.at(v)._parent; }
 
-    stack.push(start);
+    std::optional<std::size_t> discoveryTime(Descriptor v) const { return _ht.at(v)._discovery; }
 
-    while(!stack.empty()) {
-        auto current = stack.top();
-        stack.pop();
+    std::optional<std::size_t> finishTime(Descriptor v) const { return _ht.at(v)._finish; }
 
-        if(!visited.contains(current)) {
-            visited.insert(current);
-
-            res.push_back(current);
-
-            for(auto adjV : current.adjacentVertices())
-                if(!visited.contains(adjV)) stack.push(adjV);
+    auto path(Descriptor v) const
+        -> std::optional<std::forward_list<Descriptor>>
+    {
+        if (!isReachable(v)) return std::nullopt;
+        std::forward_list<Descriptor> res;
+        auto cur = v;
+        while (true) {
+            res.push_front(cur);
+            auto p = parent(cur);
+            if (!p) break;
+            cur = *p;
         }
+        return res;
     }
+
+    const std::vector<Descriptor>& preorder() const { return _preorder; }
+    const std::vector<Descriptor>& postorder() const { return _postorder; }
+
+private:
+    enum class Color { White, Gray, Black };
+
+    struct Data {
+        std::optional<Descriptor> _parent = std::nullopt;
+        std::optional<std::size_t> _discovery = std::nullopt;
+        std::optional<std::size_t> _finish = std::nullopt;
+        Color _color = Color::White;
+    };
+
+    std::unordered_map<Descriptor, Data> _ht;
+    std::vector<Descriptor> _preorder;
+    std::vector<Descriptor> _postorder;
+
+    template<GraphConcept G>
+    friend DfsForest<G> dfs(const G&, const std::vector<typename G::ConstVertexDescriptor>&);
+};
+
+template<GraphConcept Graph>
+DfsForest<Graph> dfs(const Graph& G,
+                     const std::vector<typename Graph::ConstVertexDescriptor>& starts)
+{
+    using Descriptor = typename Graph::ConstVertexDescriptor;
+    using Col = typename DfsForest<Graph>::Color;
+
+    DfsForest<Graph> res;
+    for (auto v : G.vertices())
+        res._ht.emplace(v, typename DfsForest<Graph>::Data{});
+
+    std::size_t time = 0;
+
+    std::function<void(Descriptor, std::optional<Descriptor>)> dfs_visit =
+        [&](Descriptor u, std::optional<Descriptor> parent) {
+            res._ht[u]._color = Col::Gray;
+            res._ht[u]._discovery = ++time;
+            res._ht[u]._parent = parent;
+            res._preorder.push_back(u);
+
+            for (auto v : u.adjacentVertices())
+                if (res._ht[v]._color == Col::White)
+                    dfs_visit(v, u);
+
+            res._ht[u]._color = Col::Black;
+            res._ht[u]._finish = ++time;
+            res._postorder.push_back(u);
+        };
+
+    for (auto start : starts)
+        if (res._ht[start]._color == Col::White)
+            dfs_visit(start, std::nullopt);
 
     return res;
 }
 
 template<GraphConcept Graph>
-auto dfs(const Graph& G, typename Graph::ConstVertexDescriptor start)
-    ->std::vector<typename Graph::ConstVertexDescriptor>
-{
-    using Descriptor = typename Graph::ConstVertexDescriptor;
-
-    std::stack<Descriptor> stack;
-    std::unordered_set<Descriptor> visited;
-    std::vector<Descriptor> res;
-
-    stack.push(start);
-
-    while(!stack.empty()) {
-        auto current = stack.top();
-        stack.pop();
-
-        if(!visited.contains(current)) {
-            visited.insert(current);
-
-            res.push_back(current);
-
-            for(auto adjV : current.adjacentVertices())
-                if(!visited.contains(adjV)) stack.push(adjV);
-        }
-    }
-
-    return res;
+DfsForest<Graph> dfs(const Graph& G) {
+    std::vector<typename Graph::ConstVertexDescriptor> all_starts;
+    all_starts.reserve(G.vertexCount());
+    for (auto v : G.vertices()) all_starts.push_back(v);
+    return dfs(G, all_starts);
 }
+
+template<GraphConcept Graph>
+DfsForest<Graph> dfs(const Graph& G, typename Graph::ConstVertexDescriptor start)
+{ return dfs(G, std::vector<typename Graph::ConstVertexDescriptor>{start}); }
 
 } // namespace exx::incident
 
 #endif // EXX_DFS_HPP
 
 /*** End of inlined file: dfs.hpp ***/
+
+
+/*** Start of inlined file: sccKosaraju.hpp ***/
+#ifndef EXX_SCCKOSARAJU_HPP
+#define EXX_SCCKOSARAJU_HPP
+
+
+/*** Start of inlined file: TransposedGraphView.hpp ***/
+#ifndef EXX_TRANSPOSEDGRAPHVIEW_SIMPLE_HPP
+#define EXX_TRANSPOSEDGRAPHVIEW_SIMPLE_HPP
+
+#include <ranges>
+#include <optional>
+#include <unordered_set>
+#include <vector>
+
+namespace exx::incident {
+
+template<typename Graph>
+class TransposedGraphView {
+public:
+    using VertexValueType = typename Graph::VertexValueType;
+    using ArcValueType    = typename Graph::ArcValueType;
+
+    class VertexDescriptor;
+    class ArcDescriptor;
+
+    using VertexIterator      = typename Graph::VertexIterator;
+    using ConstVertexIterator = typename Graph::ConstVertexIterator;
+    using ArcIterator         = typename Graph::ArcIterator;
+    using ConstArcIterator    = typename Graph::ConstArcIterator;
+
+    struct VertexDescriptorHash {
+        std::size_t operator()(const VertexDescriptor& desc) const {
+            return std::hash<const void*>()(&desc.base());
+        }
+    };
+    struct ArcDescriptorHash {
+        std::size_t operator()(const ArcDescriptor& desc) const {
+            return std::hash<const void*>()(&desc.base());
+        }
+    };
+
+    explicit TransposedGraphView(const Graph& graph) : _graph(graph) {}
+
+    auto vertices() const {
+        return _graph.vertices()
+               | std::views::transform([this](auto v) { return VertexDescriptor(v); });
+    }
+
+    auto arcs() const {
+        return _graph.arcs()
+               | std::views::transform([this](auto a) { return ArcDescriptor(a); });
+    }
+
+    auto beginVertices() const { return vertices().begin(); }
+    auto endVertices()   const { return vertices().end(); }
+    auto beginArcs()     const { return arcs().begin(); }
+    auto endArcs()       const { return arcs().end(); }
+
+    std::size_t vertexCount() const { return _graph.vertexCount(); }
+    std::size_t arcCount()   const { return _graph.arcCount(); }
+
+    std::optional<ArcDescriptor> findArc(VertexDescriptor from, VertexDescriptor to) const {
+        auto origArc = _graph.findArc(to._orig, from._orig);
+        if (origArc) return ArcDescriptor(*origArc);
+        return std::nullopt;
+    }
+
+    bool hasArc(VertexDescriptor from, VertexDescriptor to) const
+    { return findArc(from, to).has_value(); }
+
+    auto data(const VertexDescriptor& v) const { return v.data(); }
+    auto data(const ArcDescriptor& a)   const { return a.data(); }
+
+    const Graph& original() const { return _graph; }
+
+    class VertexDescriptor {
+    public:
+        VertexDescriptor(typename Graph::ConstVertexDescriptor orig)
+            : _orig(orig) {}
+
+        const auto& data() const { return _orig.data(); }
+
+        std::size_t outDegree() const { return _orig.inDegree(); }
+        std::size_t inDegree()  const { return _orig.outDegree(); }
+
+        auto outgoingArcs() const {
+            return _orig.incomingArcs()
+                   | std::views::transform([this](auto a) { return ArcDescriptor(a); });
+        }
+
+        auto incomingArcs() const {
+            return _orig.outgoingArcs()
+                   | std::views::transform([this](auto a) { return ArcDescriptor(a); });
+        }
+
+        std::vector<VertexDescriptor> adjacentVertices() const {
+            std::unordered_set<VertexDescriptor> unique;
+            for (auto a : outgoingArcs()) {
+                if (auto other = a.followArcDirection(*this))
+                    unique.insert(*other);
+            }
+            return {unique.begin(), unique.end()};
+        }
+
+        std::vector<VertexDescriptor> incomingVertices() const {
+            std::unordered_set<VertexDescriptor> unique;
+            for (auto a : incomingArcs())
+                unique.insert(a.from());
+            return {unique.begin(), unique.end()};
+        }
+
+        bool operator==(const VertexDescriptor& other) const { return _orig == other._orig; }
+        bool operator!=(const VertexDescriptor& other) const { return !(*this == other); }
+
+        const typename Graph::ConstVertexDescriptor& base() const { return _orig; }
+
+        using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
+
+    private:
+
+        typename Graph::ConstVertexDescriptor _orig;
+        friend class ArcDescriptor;
+    };
+
+    class ArcDescriptor {
+    public:
+        ArcDescriptor(typename Graph::ConstArcDescriptor orig)
+            : _orig(orig) {}
+
+        const auto& data() const { return _orig.data(); }
+
+        VertexDescriptor from() const { return VertexDescriptor(_orig.to()); }
+        VertexDescriptor to()   const { return VertexDescriptor(_orig.from()); }
+
+        std::optional<VertexDescriptor> followArcDirection(const VertexDescriptor& vertex) const {
+            if (vertex._orig == _orig.to())
+                return VertexDescriptor(_orig.from());
+            return std::nullopt;
+        }
+
+        std::optional<VertexDescriptor> otherEnd(const VertexDescriptor& vertex) const {
+            if (vertex._orig == _orig.from())
+                return VertexDescriptor(_orig.to());
+            if (vertex._orig == _orig.to())
+                return VertexDescriptor(_orig.from());
+            return std::nullopt;
+        }
+
+        bool operator==(const ArcDescriptor& other) const { return _orig == other._orig; }
+        bool operator!=(const ArcDescriptor& other) const { return !(*this == other); }
+
+        const typename Graph::ConstArcDescriptor& base() const { return _orig; }
+
+        using CustomHasherProvidedByExxIncident = VertexDescriptorHash;
+
+    private:
+
+        typename Graph::ConstArcDescriptor _orig;
+    };
+
+private:
+    const Graph& _graph;
+};
+
+} // namespace exx::incident
+
+#endif // EXX_TRANSPOSEDGRAPHVIEW_SIMPLE_HPP
+
+/*** End of inlined file: TransposedGraphView.hpp ***/
+
+#include <unordered_set>
+#include <vector>
+#include <stack>
+#include <algorithm>
+
+namespace exx::incident {
+
+template<DirectedGraphConcept Graph>
+class StronglyConnectedComponents;
+
+template<DirectedGraphConcept Graph>
+class StronglyConnectedComponent {
+    using Descriptor = typename Graph::ConstVertexDescriptor;
+public:
+
+    bool contains(Descriptor v) const { return _vertices.contains(v); }
+
+    std::size_t size() const { return _vertices.size(); }
+
+    auto vertices() const
+        ->const std::unordered_set<Descriptor>&
+    { return _vertices; }
+
+private:
+
+    std::unordered_set<Descriptor> _vertices = {};
+
+    template<DirectedGraphConcept G>
+    friend StronglyConnectedComponents<G> sccKosaraju(const G&);
+};
+
+template<DirectedGraphConcept Graph>
+class StronglyConnectedComponents {
+    using Descriptor = typename Graph::ConstVertexDescriptor;
+public:
+
+    auto componentOf(Descriptor v) const
+        ->std::optional<StronglyConnectedComponent<Graph>>
+    {
+        for(const auto& scc : _scc)
+            if(scc.contains(v))
+                return scc;
+        return std::nullopt;
+    }
+
+    bool areStronglyConnected(Descriptor u, Descriptor v) const {
+        auto scc_u = componentOf(u);
+        if(!scc_u.has_value()) return false;
+        if(scc_u->contains(v)) return true;
+        return false;
+    }
+
+    std::size_t componentCount() const { return _scc.size(); }
+
+    auto components() const
+        ->const std::vector<StronglyConnectedComponent<Graph>>&
+    { return _scc; }
+
+private:
+
+    std::vector<StronglyConnectedComponent<Graph>> _scc = {};
+
+    template<DirectedGraphConcept G>
+    friend StronglyConnectedComponents<G> sccKosaraju(const G&);
+
+};
+
+template<DirectedGraphConcept Graph>
+StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
+    auto forest = dfs(G);
+
+    std::vector<typename Graph::ConstVertexDescriptor> vertices;
+    for (auto v : G.vertices())
+        vertices.push_back(v);
+
+    std::ranges::sort(vertices, [&](auto lhs, auto rhs) {
+        return *forest.finishTime(lhs) > *forest.finishTime(rhs);
+    });
+
+    auto G_t = TransposedGraphView(G);
+
+    std::unordered_set<typename Graph::ConstVertexDescriptor> visited;
+    std::vector<StronglyConnectedComponent<Graph>> components;
+
+    for (auto start : vertices) {
+        if (visited.contains(start)) continue;
+
+        StronglyConnectedComponent<Graph> comp;
+        std::stack<typename Graph::ConstVertexDescriptor> stk;
+        stk.push(start);
+        visited.insert(start);
+
+        while (!stk.empty()) {
+            auto u = stk.top();
+            stk.pop();
+            comp._vertices.insert(u);
+
+            auto u_wrapped = typename TransposedGraphView<Graph>::VertexDescriptor(u);
+            for (auto w_wrapped : u_wrapped.adjacentVertices()) {
+                auto w = w_wrapped.base();
+                if (!visited.contains(w)) {
+                    visited.insert(w);
+                    stk.push(w);
+                }
+            }
+        }
+        components.push_back(std::move(comp));
+    }
+
+    StronglyConnectedComponents<Graph> result;
+    result._scc = std::move(components);
+    return result;
+}
+
+} // namespace exx::incident
+
+#endif // EXX_SCCKOSARAJU_HPP
+
+/*** End of inlined file: sccKosaraju.hpp ***/
 
 #endif // EXX_ALGORITHMS_HPP
 
