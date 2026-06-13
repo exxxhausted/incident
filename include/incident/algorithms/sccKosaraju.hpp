@@ -76,7 +76,7 @@ StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
     auto forest = dfs(G);
 
     std::vector<typename Graph::ConstVertexDescriptor> vertices;
-    vertices.reserve(G.vertexCount);
+    vertices.reserve(G.vertexCount());
     for (auto v : G.vertices())
         vertices.push_back(v);
 
@@ -98,11 +98,8 @@ StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
                        StronglyConnectedComponent<Graph>> rootToComp;
 
     for (auto v : G_t.vertices()) {
-
-        auto cur = v;
-        while (auto p = transposedForest.parent(cur)) cur = *p;
-
-        rootToComp[cur.base()]._vertices.insert(v.base());
+        auto root = transposedForest.root(v);
+        rootToComp[root->base()]._vertices.insert(v.base());
     }
 
     StronglyConnectedComponents<Graph> result;

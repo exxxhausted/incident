@@ -19,6 +19,11 @@ public:
 
     std::optional<Descriptor> parent(Descriptor v) const { return _ht.at(v)._parent; }
 
+    std::optional<Descriptor> root(Descriptor v) const {
+        if (_ht.at(v)._color == Color::White) return std::nullopt;
+        return _ht.at(v)._root;
+    }
+
     std::optional<std::size_t> depth(Descriptor v) const { return _ht.at(v)._depth; }
 
     auto path(Descriptor v) const
@@ -54,6 +59,7 @@ private:
     struct Data {
         std::optional<std::size_t> _depth = std::nullopt;
         std::optional<Descriptor> _parent = std::nullopt;
+        std::optional<Descriptor> _root   = std::nullopt;
         Color _color = Color::White;
     };
 
@@ -85,6 +91,7 @@ BfsForest<Graph> bfs(const Graph& G,
         queue.push(start);
         res._ht[start]._color = Col::Gray;
         res._ht[start]._depth = 0;
+        res._ht[start]._root  = start;
 
         while (!queue.empty()) {
             auto cur = queue.front();
@@ -95,6 +102,7 @@ BfsForest<Graph> bfs(const Graph& G,
                     res._ht[adj]._color = Col::Gray;
                     res._ht[adj]._depth = *res._ht[cur]._depth + 1;
                     res._ht[adj]._parent = cur;
+                    res._ht[adj]._root   = res._ht[cur]._root;
                     queue.push(adj);
                 }
             }

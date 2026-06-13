@@ -3,7 +3,7 @@
 
 #include "incident/algorithms/bfs.hpp"
 #include "incident/undirected/UndirectedGraph.hpp"
-#include "incident/directed/DirectedGraph.hpp".hpp"
+#include "incident/directed/DirectedGraph.hpp"
 
 using namespace exx::incident;
 

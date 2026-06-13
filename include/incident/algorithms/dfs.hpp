@@ -19,6 +19,11 @@ public:
 
     std::optional<Descriptor> parent(Descriptor v) const { return _ht.at(v)._parent; }
 
+    std::optional<Descriptor> root(Descriptor v) const {
+        if (_ht.at(v)._color == Color::White) return std::nullopt;
+        return _ht.at(v)._root;
+    }
+
     std::optional<std::size_t> discoveryTime(Descriptor v) const { return _ht.at(v)._discovery; }
 
     std::optional<std::size_t> finishTime(Descriptor v) const { return _ht.at(v)._finish; }
@@ -46,6 +51,7 @@ private:
 
     struct Data {
         std::optional<Descriptor> _parent = std::nullopt;
+        std::optional<Descriptor> _root   = std::nullopt;
         std::optional<std::size_t> _discovery = std::nullopt;
         std::optional<std::size_t> _finish = std::nullopt;
         Color _color = Color::White;
@@ -74,16 +80,17 @@ DfsForest<Graph> dfs(const Graph& G,
 
     std::size_t time = 0;
 
-    std::function<void(Descriptor, std::optional<Descriptor>)> dfs_visit =
-        [&](Descriptor u, std::optional<Descriptor> parent) {
+    std::function<void(Descriptor, std::optional<Descriptor>, Descriptor)> dfs_visit =
+        [&](Descriptor u, std::optional<Descriptor> parent, Descriptor currentRoot) {
             res._ht[u]._color = Col::Gray;
             res._ht[u]._discovery = ++time;
             res._ht[u]._parent = parent;
+            res._ht[u]._root = currentRoot;
             res._preorder.push_back(u);
 
             for (auto v : u.adjacentVertices())
                 if (res._ht[v]._color == Col::White)
-                    dfs_visit(v, u);
+                    dfs_visit(v, u, currentRoot);
 
             res._ht[u]._color = Col::Black;
             res._ht[u]._finish = ++time;
@@ -92,7 +99,7 @@ DfsForest<Graph> dfs(const Graph& G,
 
     for (auto start : starts)
         if (res._ht[start]._color == Col::White)
-            dfs_visit(start, std::nullopt);
+            dfs_visit(start, std::nullopt, start);
 
     return res;
 }
