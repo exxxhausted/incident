@@ -1979,6 +1979,8 @@ template<GraphConcept Graph>
 DfsForest<Graph> dfs(const Graph& G,
                      const std::vector<typename Graph::ConstVertexDescriptor>& starts)
 {
+    if(starts.empty()) return {};
+
     using Descriptor = typename Graph::ConstVertexDescriptor;
     using Col = typename DfsForest<Graph>::Color;
 
@@ -2053,7 +2055,9 @@ public:
     using ArcValueType    = typename Graph::ArcValueType;
 
     class VertexDescriptor;
+    using ConstVertexDescriptor = VertexDescriptor;
     class ArcDescriptor;
+    using ConstArcDescriptor = VertexDescriptor;
 
     using VertexIterator      = typename Graph::VertexIterator;
     using ConstVertexIterator = typename Graph::ConstVertexIterator;
@@ -2062,12 +2066,14 @@ public:
 
     struct VertexDescriptorHash {
         std::size_t operator()(const VertexDescriptor& desc) const {
-            return std::hash<const void*>()(&desc.base());
+            using OrigHasher = typename Graph::ConstVertexDescriptor::CustomHasherProvidedByExxIncident;
+            return OrigHasher{}(desc.base());
         }
     };
     struct ArcDescriptorHash {
         std::size_t operator()(const ArcDescriptor& desc) const {
-            return std::hash<const void*>()(&desc.base());
+            using OrigHasher = typename Graph::ConstArcDescriptor::CustomHasherProvidedByExxIncident;
+            return OrigHasher{}(desc.base());
         }
     };
 
@@ -2128,17 +2134,17 @@ public:
         std::vector<VertexDescriptor> adjacentVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (auto a : outgoingArcs()) {
-                if (auto other = a.followArcDirection(*this))
-                    unique.insert(*other);
+                auto other = a.followArcDirection(*this);
+                unique.insert(*other);
             }
-            return {unique.begin(), unique.end()};
+            return std::vector<VertexDescriptor>{unique.begin(), unique.end()};
         }
 
         std::vector<VertexDescriptor> incomingVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (auto a : incomingArcs())
                 unique.insert(a.from());
-            return {unique.begin(), unique.end()};
+            return std::vector<VertexDescriptor>{unique.begin(), unique.end()};
         }
 
         bool operator==(const VertexDescriptor& other) const { return _orig == other._orig; }
@@ -2202,7 +2208,6 @@ private:
 
 #include <unordered_set>
 #include <vector>
-#include <stack>
 #include <algorithm>
 
 namespace exx::incident {
@@ -2272,6 +2277,7 @@ StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
     auto forest = dfs(G);
 
     std::vector<typename Graph::ConstVertexDescriptor> vertices;
+    vertices.reserve(G.vertexCount);
     for (auto v : G.vertices())
         vertices.push_back(v);
 
@@ -2279,38 +2285,31 @@ StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
         return *forest.finishTime(lhs) > *forest.finishTime(rhs);
     });
 
+    std::vector<typename TransposedGraphView<Graph>::VertexDescriptor> order;
+    order.reserve(G.vertexCount());
+    std::ranges::transform(vertices,
+                           std::back_inserter(order),
+                           [](auto v){ return typename TransposedGraphView<Graph>::VertexDescriptor(v); });
+
     auto G_t = TransposedGraphView(G);
 
-    std::unordered_set<typename Graph::ConstVertexDescriptor> visited;
-    std::vector<StronglyConnectedComponent<Graph>> components;
+    auto transposedForest = dfs(G_t, order);
 
-    for (auto start : vertices) {
-        if (visited.contains(start)) continue;
+    std::unordered_map<typename Graph::ConstVertexDescriptor,
+                       StronglyConnectedComponent<Graph>> rootToComp;
 
-        StronglyConnectedComponent<Graph> comp;
-        std::stack<typename Graph::ConstVertexDescriptor> stk;
-        stk.push(start);
-        visited.insert(start);
+    for (auto v : G_t.vertices()) {
 
-        while (!stk.empty()) {
-            auto u = stk.top();
-            stk.pop();
-            comp._vertices.insert(u);
+        auto cur = v;
+        while (auto p = transposedForest.parent(cur)) cur = *p;
 
-            auto u_wrapped = typename TransposedGraphView<Graph>::VertexDescriptor(u);
-            for (auto w_wrapped : u_wrapped.adjacentVertices()) {
-                auto w = w_wrapped.base();
-                if (!visited.contains(w)) {
-                    visited.insert(w);
-                    stk.push(w);
-                }
-            }
-        }
-        components.push_back(std::move(comp));
+        rootToComp[cur.base()]._vertices.insert(v.base());
     }
 
     StronglyConnectedComponents<Graph> result;
-    result._scc = std::move(components);
+    result._scc.reserve(rootToComp.size());
+    for (auto& [root, comp] : rootToComp)
+        result._scc.push_back(std::move(comp));
     return result;
 }
 

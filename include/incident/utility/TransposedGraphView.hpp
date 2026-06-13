@@ -17,7 +17,9 @@ public:
     using ArcValueType    = typename Graph::ArcValueType;
 
     class VertexDescriptor;
+    using ConstVertexDescriptor = VertexDescriptor;
     class ArcDescriptor;
+    using ConstArcDescriptor = VertexDescriptor;
 
     using VertexIterator      = typename Graph::VertexIterator;
     using ConstVertexIterator = typename Graph::ConstVertexIterator;
@@ -26,12 +28,14 @@ public:
 
     struct VertexDescriptorHash {
         std::size_t operator()(const VertexDescriptor& desc) const {
-            return std::hash<const void*>()(&desc.base());
+            using OrigHasher = typename Graph::ConstVertexDescriptor::CustomHasherProvidedByExxIncident;
+            return OrigHasher{}(desc.base());
         }
     };
     struct ArcDescriptorHash {
         std::size_t operator()(const ArcDescriptor& desc) const {
-            return std::hash<const void*>()(&desc.base());
+            using OrigHasher = typename Graph::ConstArcDescriptor::CustomHasherProvidedByExxIncident;
+            return OrigHasher{}(desc.base());
         }
     };
 
@@ -92,17 +96,17 @@ public:
         std::vector<VertexDescriptor> adjacentVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (auto a : outgoingArcs()) {
-                if (auto other = a.followArcDirection(*this))
-                    unique.insert(*other);
+                auto other = a.followArcDirection(*this);
+                unique.insert(*other);
             }
-            return {unique.begin(), unique.end()};
+            return std::vector<VertexDescriptor>{unique.begin(), unique.end()};
         }
 
         std::vector<VertexDescriptor> incomingVertices() const {
             std::unordered_set<VertexDescriptor> unique;
             for (auto a : incomingArcs())
                 unique.insert(a.from());
-            return {unique.begin(), unique.end()};
+            return std::vector<VertexDescriptor>{unique.begin(), unique.end()};
         }
 
         bool operator==(const VertexDescriptor& other) const { return _orig == other._orig; }

@@ -7,11 +7,9 @@
 
 #include <unordered_set>
 #include <vector>
-#include <stack>
 #include <algorithm>
 
 namespace exx::incident {
-
 
 template<DirectedGraphConcept Graph>
 class StronglyConnectedComponents;
@@ -78,6 +76,7 @@ StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
     auto forest = dfs(G);
 
     std::vector<typename Graph::ConstVertexDescriptor> vertices;
+    vertices.reserve(G.vertexCount);
     for (auto v : G.vertices())
         vertices.push_back(v);
 
@@ -85,38 +84,31 @@ StronglyConnectedComponents<Graph> sccKosaraju(const Graph& G) {
         return *forest.finishTime(lhs) > *forest.finishTime(rhs);
     });
 
+    std::vector<typename TransposedGraphView<Graph>::VertexDescriptor> order;
+    order.reserve(G.vertexCount());
+    std::ranges::transform(vertices,
+                           std::back_inserter(order),
+                           [](auto v){ return typename TransposedGraphView<Graph>::VertexDescriptor(v); });
+
     auto G_t = TransposedGraphView(G);
 
-    std::unordered_set<typename Graph::ConstVertexDescriptor> visited;
-    std::vector<StronglyConnectedComponent<Graph>> components;
+    auto transposedForest = dfs(G_t, order);
 
-    for (auto start : vertices) {
-        if (visited.contains(start)) continue;
+    std::unordered_map<typename Graph::ConstVertexDescriptor,
+                       StronglyConnectedComponent<Graph>> rootToComp;
 
-        StronglyConnectedComponent<Graph> comp;
-        std::stack<typename Graph::ConstVertexDescriptor> stk;
-        stk.push(start);
-        visited.insert(start);
+    for (auto v : G_t.vertices()) {
 
-        while (!stk.empty()) {
-            auto u = stk.top();
-            stk.pop();
-            comp._vertices.insert(u);
+        auto cur = v;
+        while (auto p = transposedForest.parent(cur)) cur = *p;
 
-            auto u_wrapped = typename TransposedGraphView<Graph>::VertexDescriptor(u);
-            for (auto w_wrapped : u_wrapped.adjacentVertices()) {
-                auto w = w_wrapped.base();
-                if (!visited.contains(w)) {
-                    visited.insert(w);
-                    stk.push(w);
-                }
-            }
-        }
-        components.push_back(std::move(comp));
+        rootToComp[cur.base()]._vertices.insert(v.base());
     }
 
     StronglyConnectedComponents<Graph> result;
-    result._scc = std::move(components);
+    result._scc.reserve(rootToComp.size());
+    for (auto& [root, comp] : rootToComp)
+        result._scc.push_back(std::move(comp));
     return result;
 }
 

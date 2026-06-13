@@ -63,6 +63,8 @@ template<GraphConcept Graph>
 DfsForest<Graph> dfs(const Graph& G,
                      const std::vector<typename Graph::ConstVertexDescriptor>& starts)
 {
+    if(starts.empty()) return {};
+
     using Descriptor = typename Graph::ConstVertexDescriptor;
     using Col = typename DfsForest<Graph>::Color;
 
